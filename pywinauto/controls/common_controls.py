@@ -35,9 +35,6 @@ Classes that wrap the Windows Common controls
    :members:
    :show-inheritance:
 """
-
-
-from __future__ import absolute_import
 from __future__ import print_function
 
 import time
@@ -1688,8 +1685,7 @@ class StatusBarWrapper(HwndWrapper.HwndWrapper):
     friendlyclassname = "StatusBar"
     windowclasses = [
         "msctls_statusbar32",
-        "HSStatusBar",
-        "TStatusBar",
+        ".*StatusBar",
         r"WindowsForms\d*\.msctls_statusbar32\..*"]
 
     #----------------------------------------------------------------

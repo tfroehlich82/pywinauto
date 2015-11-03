@@ -20,25 +20,20 @@
 #    Suite 330,
 #    Boston, MA 02111-1307 USA
 
-"Wraps various standard windows controls"
-from __future__ import absolute_import
+"""Wraps various standard windows controls
+"""
 from __future__ import unicode_literals
 
-__revision__ = "$Revision$"
-
 import time
-
 import ctypes
 import win32gui
 import locale
 
 from . import HwndWrapper
-
 from .. import six
 from .. import win32functions
 from .. import win32defines
 from .. import win32structures
-#from .. import findbestmatch
 from .. import controlproperties
 
 from ..timings import Timings
@@ -50,12 +45,9 @@ class ButtonWrapper(HwndWrapper.HwndWrapper):
     friendlyclassname = "Button"
     windowclasses = [
         "Button",
+        ".*Button",
         r"WindowsForms\d*\.BUTTON\..*",
-        "TButton",
-        "ThunderCommandButton",
-        "ThunderOptionButton",
-        "ThunderCheckBox",
-        "TCheckBox"]
+        ".*CheckBox", ]
     can_be_label = True
 
     #-----------------------------------------------------------
@@ -255,7 +247,7 @@ class ComboBoxWrapper(HwndWrapper.HwndWrapper):
     windowclasses = [
         "ComboBox",
         "WindowsForms\d*\.COMBOBOX\..*",
-        "TComboBox"]
+        ".*ComboBox", ]
     has_title = False
 
     #-----------------------------------------------------------
@@ -408,9 +400,7 @@ class ListBoxWrapper(HwndWrapper.HwndWrapper):
     windowclasses = [
         "ListBox",
         r"WindowsForms\d*\.LISTBOX\..*",
-        "ThunderListBox",
-        "ThunderFileListBox",
-        "TListBox",]
+        ".*ListBox", ]
     has_title = False
 
     #-----------------------------------------------------------
@@ -603,7 +593,7 @@ class EditWrapper(HwndWrapper.HwndWrapper):
     friendlyclassname = "Edit"
     windowclasses = [
         "Edit",
-        "TEdit",
+        ".*Edit",
         "TMemo",
         r"WindowsForms\d*\.EDIT\..*",
         "ThunderTextBox",
@@ -797,7 +787,8 @@ class StaticWrapper(HwndWrapper.HwndWrapper):
     windowclasses = [
         "Static",
         r"WindowsForms\d*\.STATIC\..*",
-        "TPanel"]
+        "TPanel",
+        ".*StaticText"]
     can_be_label = True
 
     def __init__(self, hwnd):
