@@ -22,12 +22,6 @@ import os, sys
 import platform
 import ctypes
 
-try:
-    import comtypes
-    UIA_support = True
-except ImportError:
-    UIA_support = False
-
 def OS_architecture():
     architectureMap = {
         'x86':'x86',

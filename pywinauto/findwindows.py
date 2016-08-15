@@ -33,10 +33,9 @@ from . import win32structures
 from . import handleprops
 from . import findbestmatch
 from . import controls
-from .elementInfo import NativeElementInfo
 
 
-# TODO: we should filter out invalid windows before returning
+# todo: we should filter out invalid windows before returning
 
 #=========================================================================
 class WindowNotFoundError(Exception):
@@ -119,7 +118,7 @@ def find_windows(class_name = None,
     # allow a handle to be passed in
     # if it is present - just return it
     if handle is not None:
-        return [NativeElementInfo(handle), ]
+        return [handle, ]
 
     if top_level_only:
         # find the top level windows
@@ -142,7 +141,7 @@ def find_windows(class_name = None,
         # if the ctrl_index has been specified then just return
         # that control
         if ctrl_index is not None:
-            return [NativeElementInfo(windows[ctrl_index])]
+            return [windows[ctrl_index]]
 
     if control_id is not None and windows:
         windows = [win for win in windows if
@@ -228,7 +227,7 @@ def find_windows(class_name = None,
                 (found_index, len(windows)) 
                 )
 
-    return [NativeElementInfo(handle) for handle in windows]
+    return windows
 
 #=========================================================================
 def enum_windows():

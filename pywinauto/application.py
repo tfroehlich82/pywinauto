@@ -522,7 +522,7 @@ def _get_ctrl(criteria_):
 
     # find the dialog
     dialog = controls.WrapHandle(
-        findwindows.find_window(**criteria[0]).handle)
+        findwindows.find_window(**criteria[0]))
 
     ctrl = None
     # if there is only criteria for a dialog then return it
@@ -536,7 +536,7 @@ def _get_ctrl(criteria_):
 
         # resolve the control and return it
         ctrl = controls.WrapHandle(
-            findwindows.find_window(**ctrl_criteria).handle)
+            findwindows.find_window(**ctrl_criteria))
 
     if ctrl:
         return (dialog, ctrl)
@@ -598,16 +598,17 @@ def _resolve_from_appdata(
     dialog_criterion['class_name'] = matched_control[1]['Class']
 
     # find all the windows in the process
-    process_elems = findwindows.find_windows(**dialog_criterion)
+    process_hwnds = findwindows.find_windows(**dialog_criterion)
 
     dialog = None
     ctrl = None
-    if process_elems:
-        similar_child_count = [e for e in process_elems
+    if process_hwnds:
+
+        similar_child_count = [h for h in process_hwnds
             if matched_control[1]['ControlCount'] -2 <=
-                    len(e.children()) and
+                    len(handleprops.children(h)) and
                 matched_control[1]['ControlCount'] +2 >=
-                    len(e.children())]
+                    len(handleprops.children(h))]
 
         if similar_child_count:
             process_hwnds = similar_child_count
@@ -615,11 +616,11 @@ def _resolve_from_appdata(
         #    print("None Similar child count!!???")
         #    print(matched_control[1]['ControlCount'], len(handleprops.children(h)))
 
-        for e in process_elems:
+        for h in process_hwnds:
             #print controls.WrapHandle(h).GetProperties()
             #print "======", h, h, h
 
-            dialog = controls.WrapHandle(e.handle)
+            dialog = controls.WrapHandle(h)
 
             # if a control was specified also
             if len(criteria_) > 1:
@@ -641,19 +642,19 @@ def _resolve_from_appdata(
                 ctrl_criterion['top_level_only'] = False
                 #ctrl_criterion['predicate_func'] = has_same_id
                 #print "CTRLCTRJL", ctrl_criterion
-                ctrl_elems = findwindows.find_windows(**ctrl_criterion)
+                ctrl_hwnds = findwindows.find_windows(**ctrl_criterion)
 
-                if len(ctrl_elems) > 1:
+                if len(ctrl_hwnds) > 1:
                     same_ids = \
-                        [elem for elem in ctrl_elems
-                            if elem.controlId == \
+                        [hwnd for hwnd in ctrl_hwnds
+                            if handleprops.controlid(hwnd) == \
                                 matched_control[2]['ControlID']]
 
                     if same_ids:
-                        ctrl_elems = same_ids
+                        ctrl_hwnds = same_ids
 
                 try:
-                    ctrl = controls.WrapHandle(ctrl_elems[0].handle)
+                    ctrl = controls.WrapHandle(ctrl_hwnds[0])
                 except IndexError:
                     print("-+-+=_" * 20)
                     #print(found_criteria)
@@ -831,7 +832,7 @@ class Application(object):
             connected = True
 
         elif kwargs:
-            handle = findwindows.find_window(**kwargs).handle
+            handle = findwindows.find_window(**kwargs)
             self.process = handleprops.processid(handle)
             connected = True
 
@@ -1013,7 +1014,7 @@ class Application(object):
             raise RuntimeError("No windows for that process could be found")
 
         criteria = {}
-        criteria['handle'] = windows[0].handle
+        criteria['handle'] = windows[0]
 
         return WindowSpecification(criteria)
 
@@ -1032,7 +1033,7 @@ class Application(object):
             raise RuntimeError("No Windows of that application are active")
 
         criteria = {}
-        criteria['handle'] = windows[0].handle
+        criteria['handle'] = windows[0]
 
         return WindowSpecification(criteria)
 
@@ -1056,7 +1057,7 @@ class Application(object):
 
         windows = findwindows.find_windows(**kwargs)
 
-        return [controls.WrapHandle(win.handle) for win in windows]
+        return [controls.WrapHandle(win) for win in windows]
 
     Windows_ = windows_
 

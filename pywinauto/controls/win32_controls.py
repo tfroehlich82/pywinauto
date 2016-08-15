@@ -30,8 +30,6 @@ import win32gui
 import locale
 
 from . import HwndWrapper
-
-from .. import sysinfo
 from .. import six
 from .. import win32functions
 from .. import win32defines
@@ -39,9 +37,6 @@ from .. import win32structures
 from .. import controlproperties
 
 from ..timings import Timings
-
-if sysinfo.UIA_support:
-    from .. import UIAElementInfo
 
 #====================================================================
 class ButtonWrapper(HwndWrapper.HwndWrapper):
@@ -53,11 +48,6 @@ class ButtonWrapper(HwndWrapper.HwndWrapper):
         ".*Button",
         r"WindowsForms\d*\.BUTTON\..*",
         ".*CheckBox", ]
-    if sysinfo.UIA_support:
-        controltypes = [
-            UIAElementInfo._UIA_dll.UIA_ButtonControlTypeId,
-            UIAElementInfo._UIA_dll.UIA_CheckBoxControlTypeId,
-            UIAElementInfo._UIA_dll.UIA_RadioButtonControlTypeId]
     can_be_label = True
 
     #-----------------------------------------------------------
@@ -258,9 +248,6 @@ class ComboBoxWrapper(HwndWrapper.HwndWrapper):
         "ComboBox",
         "WindowsForms\d*\.COMBOBOX\..*",
         ".*ComboBox", ]
-    if sysinfo.UIA_support:
-        controltypes = [
-            UIAElementInfo._UIA_dll.UIA_ComboBoxControlTypeId]
     has_title = False
 
     #-----------------------------------------------------------
@@ -414,9 +401,6 @@ class ListBoxWrapper(HwndWrapper.HwndWrapper):
         "ListBox",
         r"WindowsForms\d*\.LISTBOX\..*",
         ".*ListBox", ]
-    if sysinfo.UIA_support:
-        controltypes = [
-            UIAElementInfo._UIA_dll.UIA_ListControlTypeId]
     has_title = False
 
     #-----------------------------------------------------------
@@ -615,9 +599,6 @@ class EditWrapper(HwndWrapper.HwndWrapper):
         "ThunderTextBox",
         "ThunderRT6TextBox",
         ]
-    if sysinfo.UIA_support:
-        controltypes = [
-            UIAElementInfo._UIA_dll.UIA_EditControlTypeId]
     has_title = False
 
     #-----------------------------------------------------------
@@ -808,10 +789,6 @@ class StaticWrapper(HwndWrapper.HwndWrapper):
         r"WindowsForms\d*\.STATIC\..*",
         "TPanel",
         ".*StaticText"]
-    if sysinfo.UIA_support:
-        controltypes = [
-            UIAElementInfo._UIA_dll.UIA_ImageControlTypeId,
-            UIAElementInfo._UIA_dll.UIA_TextControlTypeId]
     can_be_label = True
 
     def __init__(self, hwnd):
@@ -844,9 +821,6 @@ class DialogWrapper(HwndWrapper.HwndWrapper):
 
     friendlyclassname = "Dialog"
     #windowclasses = ["#32770", ]
-    if sysinfo.UIA_support:
-        controltypes = [
-            UIAElementInfo._UIA_dll.UIA_WindowControlTypeId]
     can_be_label = True
 
     #-----------------------------------------------------------
@@ -969,9 +943,6 @@ class PopupMenuWrapper(HwndWrapper.HwndWrapper):
 
     friendlyclassname = "PopupMenu"
     windowclasses = ["#32768", ]
-    if sysinfo.UIA_support:
-        controltypes = [
-            UIAElementInfo._UIA_dll.UIA_MenuControlTypeId]
     has_title = False
 
     #-----------------------------------------------------------

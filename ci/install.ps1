@@ -42,6 +42,7 @@ function DownloadMiniconda ($python_version, $platform_suffix) {
    return $filepath
 }
 
+
 function InstallMiniconda ($python_version, $architecture, $python_home) {
     Write-Host "Installing Python" $python_version "for" $architecture "bit architecture to" $python_home
     if (Test-Path $python_home) {
@@ -69,6 +70,7 @@ function InstallMiniconda ($python_version, $architecture, $python_home) {
     }
 }
 
+
 function InstallCondaPackages ($python_home, $spec) {
     $conda_path = $python_home + "\Scripts\conda.exe"
     $args = "install --yes " + $spec
@@ -84,11 +86,6 @@ function UpdateConda ($python_home) {
     Start-Process -FilePath "$conda_path" -ArgumentList $args -Wait -Passthru
 }
 
-function InstallComtypes ($python_home) {
-    $pip_path = $python_home + "\Scripts\pip.exe"
-    $args = "install comtypes"
-    Start-Process -FilePath "$pip_path" -ArgumentList $args -Wait -Passthru
-}
 
 function main () {
     try {
@@ -110,12 +107,9 @@ function main () {
         Write-Host "PYTHON_ARCH=" $env:PYTHON_ARCH
     }        
 
-    if ($env:UIA_SUPPORT -eq "YES") {
-        InstallComtypes $env:PYTHON
-    }
-    #InstallMiniconda $env:PYTHON_VERSION $env:PYTHON_ARCH $env:PYTHON
-    #UpdateConda $env:PYTHON
-    #InstallCondaPackages $env:PYTHON "pywin32 Pillow coverage nose"
+    InstallMiniconda $env:PYTHON_VERSION $env:PYTHON_ARCH $env:PYTHON
+    UpdateConda $env:PYTHON
+    InstallCondaPackages $env:PYTHON "pywin32 Pillow coverage nose"
 }
 
 main
