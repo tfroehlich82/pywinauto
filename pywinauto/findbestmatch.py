@@ -1,33 +1,40 @@
 # GUI Application automation and testing library
-# Copyright (C) 2015 Intel Corporation
-# Copyright (C) 2015 airelil
-# Copyright (C) 2010 Mark Mc Mahon
+# Copyright (C) 2006-2016 Mark Mc Mahon and Contributors
+# https://github.com/pywinauto/pywinauto/graphs/contributors
+# http://pywinauto.github.io/docs/credits.html
+# All rights reserved.
 #
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Lesser General Public License
-# as published by the Free Software Foundation; either version 2.1
-# of the License, or (at your option) any later version.
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
 #
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-# See the GNU Lesser General Public License for more details.
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
 #
-# You should have received a copy of the GNU Lesser General Public
-# License along with this library; if not, write to the
-#    Free Software Foundation, Inc.,
-#    59 Temple Place,
-#    Suite 330,
-#    Boston, MA 02111-1307 USA
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+#
+# * Neither the name of pywinauto nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""Module to find the closest match of a string in a list
-"""
+"""Module to find the closest match of a string in a list"""
 from __future__ import unicode_literals
 
 import re
 import difflib
-
-from . import six
+import six
 #import ctypes
 #import ldistance
 #levenshtein_distance = ctypes.cdll.levenshtein.levenshtein_distance
@@ -37,16 +44,18 @@ find_best_control_match_cutoff = .6
 
 #====================================================================
 class MatchError(IndexError):
-    "A suitable match could not be found"
+
+    """A suitable match could not be found"""
+
     def __init__(self, items = None, tofind = ''):
-        "Init the parent with the message"
+        """Init the parent with the message"""
         self.tofind = tofind
         self.items = items
         if self.items is None:
             self.items = []
 
         IndexError.__init__(self,
-            "Could not find '%s' in '%s'"% (tofind, self.items))
+            "Could not find '{0}' in '{1}'".format(tofind, self.items))
 
 
 _cache = {}
@@ -55,17 +64,14 @@ _cache = {}
 # and the best score and text with best score
 #====================================================================
 def _get_match_ratios(texts, match_against):
-    "Get the match ratio of how each item in texts compared to match_against"
-
-    # now time to figre out the matching
+    """Get the match ratio of how each item in texts compared to match_against"""
+    # now time to figure out the matching
     ratio_calc = difflib.SequenceMatcher()
     ratio_calc.set_seq1(match_against)
 
     ratios = {}
     best_ratio = 0
     best_text = ''
-
-    global _cache
 
     for text in texts:
 
@@ -100,8 +106,6 @@ def _get_match_ratios(texts, match_against):
     return ratios, best_ratio, best_text
 
 
-
-
 #====================================================================
 def find_best_match(search_text, item_texts, items, limit_ratio = .5):
     """Return the item that best matches the search_text
@@ -131,38 +135,33 @@ def find_best_match(search_text, item_texts, items, limit_ratio = .5):
     return text_item_map[best_text]
 
 
-
-
-
 #====================================================================
 _after_tab = re.compile(r"\t.*", re.UNICODE)
 _after_eol = re.compile(r"\n.*", re.UNICODE)
 _non_word_chars = re.compile(r"\W", re.UNICODE)
 
 def _cut_at_tab(text):
-    "Clean out non characters from the string and return it"
-
+    """Clean out non characters from the string and return it"""
     # remove anything after the first tab
     return  _after_tab.sub("", text)
 
 def _cut_at_eol(text):
-    "Clean out non characters from the string and return it"
-
+    """Clean out non characters from the string and return it"""
     # remove anything after the first EOL
     return  _after_eol.sub("", text)
 
 def _clean_non_chars(text):
-    "Remove non word characters"
+    """Remove non word characters"""
     # should this also remove everything after the first tab?
 
     # remove non alphanumeric characters
     return _non_word_chars.sub("", text)
 
 
-def IsAboveOrToLeft(ref_control, other_ctrl):
-    "Return true if the other_ctrl is above or to the left of ref_control"
-    text_r = other_ctrl.Rectangle()
-    ctrl_r = ref_control.Rectangle()
+def is_above_or_to_left(ref_control, other_ctrl):
+    """Return true if the other_ctrl is above or to the left of ref_control"""
+    text_r = other_ctrl.rectangle()
+    ctrl_r = ref_control.rectangle()
 
     # skip controls where text win is to the right of ctrl
     if text_r.left >= ctrl_r.right:
@@ -182,25 +181,32 @@ def IsAboveOrToLeft(ref_control, other_ctrl):
 
 #====================================================================
 distance_cuttoff = 999
-def GetNonTextControlName(ctrl, controls, text_ctrls):
-    """return the name for this control by finding the closest
-    text control above and to its left"""
-
+def get_non_text_control_name(ctrl, controls, text_ctrls):
+    """
+    return the name for this control by finding the closest
+    text control above and to its left
+    """
     names = []
 
-    ctrl_index = controls.index(ctrl)
-    ctrl_friendly_class_name =  ctrl.FriendlyClassName()
+    # simply look for an instance of the control in the list,
+    # we don't use list.index() method as it invokes __eq__
+    ctrl_index = 0
+    for i, c in enumerate(controls):
+        if c is ctrl:
+            ctrl_index = i
+            break
+    ctrl_friendly_class_name = ctrl.friendly_class_name()
 
     if ctrl_index != 0:
         prev_ctrl = controls[ctrl_index-1]
 
-        if prev_ctrl.FriendlyClassName() == "Static" and \
-            prev_ctrl.IsVisible() and prev_ctrl.WindowText() and \
-            IsAboveOrToLeft(ctrl, prev_ctrl):
+        if prev_ctrl.friendly_class_name() == "Static" and \
+            prev_ctrl.is_visible() and prev_ctrl.window_text() and \
+            is_above_or_to_left(ctrl, prev_ctrl):
 
             names.append(
-                prev_ctrl.WindowText() +
-                    ctrl_friendly_class_name)
+                prev_ctrl.window_text() +
+                ctrl_friendly_class_name)
 
     best_name = ''
     closest = distance_cuttoff
@@ -208,8 +214,8 @@ def GetNonTextControlName(ctrl, controls, text_ctrls):
     for text_ctrl in text_ctrls:
 
         # get aliases to the control rectangles
-        text_r = text_ctrl.Rectangle()
-        ctrl_r = ctrl.Rectangle()
+        text_r = text_ctrl.rectangle()
+        ctrl_r = ctrl.rectangle()
 
         # skip controls where text win is to the right of ctrl
         if text_r.left >= ctrl_r.right:
@@ -228,7 +234,6 @@ def GetNonTextControlName(ctrl, controls, text_ctrls):
         #    Top-Right of the text control (text control to the left)
         #    Bottom-Left of the text control (text control above)
         # then I get the min of these two
-
 
         # We do not actually need to calculate the difference here as we
         # only need a comparative number. As long as we find the closest one
@@ -251,21 +256,22 @@ def GetNonTextControlName(ctrl, controls, text_ctrls):
         distance2 = abs(text_r.right - ctrl_r.left) + abs(text_r.top - ctrl_r.top)
 
         distance = min(distance, distance2)
-        
-        # UpDown control should use Static text only because edit box text is often useless
-        if ctrl_friendly_class_name == "UpDown":
-            if text_ctrl.FriendlyClassName() == "Static": # vvryabov's TODO: use search in all text controls for all non-text ones (like Dijkstra algorithm vs Floyd one)
-                if distance < closest:
-                    closest = distance
-                    best_name = text_ctrl.WindowText() + ctrl_friendly_class_name
 
-        # if this distance was closer then the last one
+        # UpDown control should use Static text only because edit box text is often useless
+        if ctrl_friendly_class_name == "UpDown" and \
+                text_ctrl.friendly_class_name() == "Static" and distance < closest:
+            # TODO: use search in all text controls for all non-text ones
+            # (like Dijkstra algorithm vs Floyd one)
+            closest = distance
+            best_name = text_ctrl.window_text() + ctrl_friendly_class_name
+
+        # if this distance was closer than the last one
         elif distance < closest:
             closest = distance
-            #if text_ctrl.WindowText() == '':
-            #    best_name = ctrl_friendly_class_name + ' '.join(text_ctrl.Texts()[1:2])
+            #if text_ctrl.window_text() == '':
+            #    best_name = ctrl_friendly_class_name + ' '.join(text_ctrl.texts()[1:2])
             #else:
-            best_name = text_ctrl.WindowText() + ctrl_friendly_class_name
+            best_name = text_ctrl.window_text() + ctrl_friendly_class_name
 
     names.append(best_name)
 
@@ -274,7 +280,7 @@ def GetNonTextControlName(ctrl, controls, text_ctrls):
 
 #====================================================================
 def get_control_names(control, allcontrols, textcontrols):
-    "Returns a list of names for this control"
+    """Returns a list of names for this control"""
     names = []
 
     # if it has a reference control - then use that
@@ -282,27 +288,27 @@ def get_control_names(control, allcontrols, textcontrols):
     #    control = control.ref
 
     # Add the control based on it's friendly class name
-    friendly_class_name = control.FriendlyClassName()
+    friendly_class_name = control.friendly_class_name()
     names.append(friendly_class_name)
 
     # if it has some character text then add it base on that
     # and based on that with friendly class name appended
-    cleaned = control.WindowText()
+    cleaned = control.window_text()
     # Todo - I don't like the hardcoded classnames here!
     if cleaned and control.has_title:
         names.append(cleaned)
         names.append(cleaned + friendly_class_name)
     elif control.has_title and friendly_class_name != 'TreeView':
         try:
-            for text in control.Texts()[1:]:
+            for text in control.texts()[1:]:
                 names.append(friendly_class_name + text)
         except Exception:
             #import traceback
             #from .actionlogger import ActionLogger
-            pass #ActionLogger().log('Warning! Cannot get control.Texts()') #\nTraceback:\n' + traceback.format_exc())
+            pass #ActionLogger().log('Warning! Cannot get control.texts()') #\nTraceback:\n' + traceback.format_exc())
 
         # so find the text of the nearest text visible control
-        non_text_names = GetNonTextControlName(control, allcontrols, textcontrols)
+        non_text_names = get_non_text_control_name(control, allcontrols, textcontrols)
 
         # and if one was found - add it
         if non_text_names:
@@ -310,7 +316,7 @@ def get_control_names(control, allcontrols, textcontrols):
     # it didn't have visible text
     else:
         # so find the text of the nearest text visible control
-        non_text_names = GetNonTextControlName(control, allcontrols, textcontrols)
+        non_text_names = get_non_text_control_name(control, allcontrols, textcontrols)
 
         # and if one was found - add it
         if non_text_names:
@@ -322,10 +328,11 @@ def get_control_names(control, allcontrols, textcontrols):
 
 #====================================================================
 class UniqueDict(dict):
-    "A dictionary subclass that handles making it's keys unique"
-    def __setitem__(self, text, item):
-        "Set an item of the dictionary"
 
+    """A dictionary subclass that handles making its keys unique"""
+
+    def __setitem__(self, text, item):
+        """Set an item of the dictionary"""
         # this text is already in the map
         # so we need to make it unique
         if text in self:
@@ -355,14 +362,12 @@ class UniqueDict(dict):
         search_text,
         clean = False,
         ignore_case = False):
-
         """Return the best matches for search_text in the items
 
         * **search_text** the text to look for
         * **clean** whether to clean non text characters out of the strings
         * **ignore_case** compare strings case insensitively
         """
-
         # now time to figure out the matching
         ratio_calc = difflib.SequenceMatcher()
 
@@ -452,7 +457,7 @@ def build_unique_dict(controls):
     # get the visible text controls so that we can get
     # the closest text if the control has no text
     text_ctrls = [ctrl_ for ctrl_ in controls
-        if ctrl_.IsVisible() and ctrl_.WindowText() and ctrl_.can_be_label]
+                  if ctrl_.can_be_label and ctrl_.is_visible() and ctrl_.window_text()]
 
     # collect all the possible names for all controls
     # and build a list of them
@@ -478,9 +483,7 @@ def find_best_control_matches(search_text, controls):
     But if there is a ListView (which do not have visible 'text')
     then it will just add "ListView".
     """
-
     name_control_map = build_unique_dict(controls)
-
 
 #    # collect all the possible names for all controls
 #    # and build a list of them
@@ -522,10 +525,6 @@ def find_best_control_matches(search_text, controls):
         raise MatchError(items = name_control_map.keys(), tofind = search_text)
 
     return [name_control_map[best_text] for best_text in best_texts]
-
-
-
-
 
 
 #
