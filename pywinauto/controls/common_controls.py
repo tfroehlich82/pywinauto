@@ -1,7 +1,7 @@
 # GUI Application automation and testing library
 # Copyright (C) 2006-2016 Mark Mc Mahon and Contributors
 # https://github.com/pywinauto/pywinauto/graphs/contributors
-# http://pywinauto.github.io/docs/credits.html
+# http://pywinauto.readthedocs.io/en/latest/credits.html
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -62,7 +62,7 @@ from ..remote_memory_block import RemoteMemoryBlock
 from . import hwndwrapper
 
 from ..timings import Timings
-from ..timings import WaitUntil
+from ..timings import wait_until
 from ..handleprops import is64bitprocess
 from ..sysinfo import is_x64_Python
 
@@ -2709,7 +2709,7 @@ class ToolbarWrapper(hwndwrapper.HwndWrapper):
             windows_before = app.Windows_(visible_only=True)
             current_toolbar.button(index).click_input()
             if i < len(indices) - 1:
-                WaitUntil(5, 0.1, lambda: len(app.Windows_(visible_only=True)) > len(windows_before))
+                wait_until(5, 0.1, lambda: len(app.Windows_(visible_only=True)) > len(windows_before))
                 windows_after = app.Windows_(visible_only=True)
                 new_window = set(windows_after) - set(windows_before)
                 current_toolbar = list(new_window)[0].children()[0]

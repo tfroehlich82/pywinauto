@@ -1,7 +1,7 @@
 # GUI Application automation and testing library
 # Copyright (C) 2006-2016 Mark Mc Mahon and Contributors
 # https://github.com/pywinauto/pywinauto/graphs/contributors
-# http://pywinauto.github.io/docs/credits.html
+# http://pywinauto.readthedocs.io/en/latest/credits.html
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -600,6 +600,11 @@ class HwndWrapper(BaseWrapper):
         """Returns the hash value of the handle"""
         return hash(self.handle)
 
+    #-----------------------------------------------------------
+    def wait_for_idle(self):
+        """Backend specific function to wait for idle state of a thread or a window"""
+        win32functions.WaitGuiThreadIdle(self)
+
     # -----------------------------------------------------------
     def click(
         self, button = "left", pressed = "", coords = (0, 0), double = False, absolute = False):
@@ -647,7 +652,7 @@ class HwndWrapper(BaseWrapper):
 
         # Keep waiting until both this control and it's parent
         # are no longer valid controls
-        timings.WaitUntil(
+        timings.wait_until(
             Timings.closeclick_dialog_close_wait,
             Timings.closeclick_retry,
             has_closed
@@ -1039,7 +1044,7 @@ class HwndWrapper(BaseWrapper):
 
         # Keep waiting until both this control and it's parent
         # are no longer valid controls
-        timings.WaitUntil(
+        timings.wait_until(
             wait_time,
             Timings.closeclick_retry,
             has_closed

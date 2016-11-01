@@ -1,7 +1,7 @@
 # GUI Application automation and testing library
 # Copyright (C) 2006-2016 Mark Mc Mahon and Contributors
 # https://github.com/pywinauto/pywinauto/graphs/contributors
-# http://pywinauto.github.io/docs/credits.html
+# http://pywinauto.readthedocs.io/en/latest/credits.html
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -56,8 +56,15 @@ sys.path.append(setup_path())
 #    if not os.path.exists(setup_path("docs")):
 #        shutil.move(setup_path("website"), setup_path("docs"))
 
+if sys.platform == 'win32':
+    install_requires = ['six', 'pypiwin32', 'comtypes']
+    packages = ["pywinauto", "pywinauto.tests", "pywinauto.controls", "pywinauto.linux"]
+else:
+    install_requires = ['six', 'python-xlib']
+    packages = ["pywinauto", "pywinauto.linux"]
+
 setup(name='pywinauto',
-    version = '0.6.0.rc1',
+    version = '0.6.0',
     description = 'pywinauto is a set of python '
         'modules to automate the Microsoft Windows GUI',
     keywords = "windows automation gui GuiAuto",
@@ -71,7 +78,7 @@ controls also.
 """,
     platforms=['win32'],
 
-    packages = ["pywinauto", "pywinauto.tests", "pywinauto.controls"],
+    packages = packages,
 
     license = "BSD 3-clause",
     classifiers=[
@@ -92,6 +99,6 @@ controls also.
         'Topic :: Software Development :: User Interfaces',
         'Topic :: Software Development :: Quality Assurance',
         ],
-    install_requires=['six', 'pypiwin32', 'comtypes'],
+    install_requires=install_requires,
     setup_requires=['setuptools-scm'],
     )

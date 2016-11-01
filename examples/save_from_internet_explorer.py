@@ -1,7 +1,7 @@
 # GUI Application automation and testing library
 # Copyright (C) 2006-2016 Mark Mc Mahon and Contributors
 # https://github.com/pywinauto/pywinauto/graphs/contributors
-# http://pywinauto.github.io/docs/credits.html
+# http://pywinauto.readthedocs.io/en/latest/credits.html
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -49,12 +49,12 @@ if len(sys.argv) < 2:
     print("please specify a web address to download")
     sys.exit()
 
-web_addresss = sys.argv[1]
+web_address = sys.argv[1]
 
 if len(sys.argv) > 2:
     outputfilename = sys.argv[2]
 else:
-    outputfilename = web_addresss
+    outputfilename = web_address
     outputfilename = outputfilename.replace('/', '')
     outputfilename = outputfilename.replace('\\', '')
     outputfilename = outputfilename.replace(':', '')
@@ -64,12 +64,12 @@ outputfilename = os.path.abspath(outputfilename)
 
 # start IE with a start URL of what was passed in
 app = application.Application().start(
-    r"c:\program files\internet explorer\iexplore.exe %s"% web_addresss)
+    r"c:\program files\internet explorer\iexplore.exe {}".format(web_address))
 
 # some pages are slow to open - so wait some seconds
 time.sleep(10)
 
-ie =  app.window_(title_re = ".*Windows Internet Explorer.*")
+ie =  app.window(title_re = ".*Windows Internet Explorer.*")
 
 # ie doesn't define it's menus as Menu's but actually as a toolbar!
 print("No Menu's in IE:", ie.menu_items())

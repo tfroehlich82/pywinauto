@@ -1,7 +1,7 @@
 # GUI Application automation and testing library
 # Copyright (C) 2006-2016 Mark Mc Mahon and Contributors
 # https://github.com/pywinauto/pywinauto/graphs/contributors
-# http://pywinauto.github.io/docs/credits.html
+# http://pywinauto.readthedocs.io/en/latest/credits.html
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -179,7 +179,7 @@ class BaseWrapper(object):
     #------------------------------------------------------------
     @property
     def element_info(self):
-        """Read-only property to get *ElementInfo object"""
+        """Read-only property to get **ElementInfo** object"""
         return self._element_info
 
     #------------------------------------------------------------
@@ -237,8 +237,8 @@ class BaseWrapper(object):
         owns this element and the element itself are both visible.
 
         If you want to wait for an element to become visible (or wait
-        for it to become hidden) use ``Application.Wait('visible')`` or
-        ``Application.WaitNot('visible')``.
+        for it to become hidden) use ``Application.wait('visible')`` or
+        ``Application.wait_not('visible')``.
 
         If you want to raise an exception immediately if an element is
         not visible then you can use the BaseWrapper.verify_visible().
@@ -256,8 +256,8 @@ class BaseWrapper(object):
         owns this element and the element itself are both enabled.
 
         If you want to wait for an element to become enabled (or wait
-        for it to become disabled) use ``Application.Wait('visible')`` or
-        ``Application.WaitNot('visible')``.
+        for it to become disabled) use ``Application.wait('visible')`` or
+        ``Application.wait_not('visible')``.
 
         If you want to raise an exception immediately if an element is
         not enabled then you can use the BaseWrapper.verify_enabled().
@@ -375,33 +375,31 @@ class BaseWrapper(object):
         return texts_list
 
     #-----------------------------------------------------------
-    def children(self, class_name=None, title=None, control_type=None, is_content_element=None):
+    def children(self, class_name=None, title=None, control_type=None, content_only=None):
         """
         Return the children of this element as a list
 
         It returns a list of BaseWrapper (or subclass) instances.
         An empty list is returned if there are no children.
         """
-        child_elements = self.element_info.children(process=self.process_id(),
-                                                    class_name=class_name,
+        child_elements = self.element_info.children(class_name=class_name,
                                                     title=title,
                                                     control_type=control_type,
-                                                    is_content_element=is_content_element)
+                                                    content_only=content_only)
         return [self.backend.generic_wrapper_class(element_info) for element_info in child_elements]
 
     #-----------------------------------------------------------
-    def descendants(self, class_name=None, title=None, control_type=None, is_content_element=None):
+    def descendants(self, class_name=None, title=None, control_type=None, content_only=None):
         """
         Return the descendants of this element as a list
 
         It returns a list of BaseWrapper (or subclass) instances.
         An empty list is returned if there are no descendants.
         """
-        desc_elements = self.element_info.descendants(process=self.process_id(),
-                                                      class_name=class_name,
+        desc_elements = self.element_info.descendants(class_name=class_name,
                                                       title=title,
                                                       control_type=control_type,
-                                                      is_content_element=is_content_element)
+                                                      content_only=content_only)
         return [self.backend.generic_wrapper_class(element_info) for element_info in desc_elements]
 
     #-----------------------------------------------------------
@@ -553,11 +551,7 @@ class BaseWrapper(object):
         Raise either ElementNotEnalbed or ElementNotVisible if not
         enabled or visible respectively.
         """
-        if self.element_info.handle:
-            win32functions.WaitGuiThreadIdle(self)
-        else:
-            # TODO: get WaitGuiThreadIdle function for elements without handle
-            pass
+        self.wait_for_idle()
         self.verify_visible()
         self.verify_enabled()
 
@@ -627,8 +621,6 @@ class BaseWrapper(object):
         coords = list(coords)
 
         # set the default coordinates
-        # TODO: buggy if absolute=False (rectangle returns absolute coords!)
-        # A possible fix: if None in coords: calculate coords and force absolute=True
         if coords[0] is None:
             coords[0] = int(self.rectangle().width() / 2)
         if coords[1] is None:
@@ -717,12 +709,7 @@ class BaseWrapper(object):
 
         self.click_input(button='move', coords=coords, absolute=absolute, pressed=pressed)
 
-        if self.element_info.handle:
-            win32functions.WaitGuiThreadIdle(self)
-        else:
-            # TODO: get WaitGuiThreadIdle function for elements without handle
-            pass
-
+        self.wait_for_idle()
         return self
 
     # -----------------------------------------------------------
@@ -792,6 +779,12 @@ class BaseWrapper(object):
         return self
 
     #-----------------------------------------------------------
+    def wait_for_idle(self):
+        """Backend specific function to wait for idle state of a thread or a window"""
+        pass # do nothing by deafault
+        # TODO: implement wait_for_idle for backend="uia"
+
+    #-----------------------------------------------------------
     def type_keys(
         self,
         keys,
@@ -804,9 +797,10 @@ class BaseWrapper(object):
         """
         Type keys to the element using keyboard.SendKeys
 
-        This uses the re-written keyboard python module like that
-        http://www.rutherfurd.net/python/sendkeys/ .This is the best place
-        to find documentation on what to use for the **keys**
+        This uses the re-written keyboard_ python module where you can
+        find documentation on what to use for the **keys**.
+
+        .. _keyboard: pywinauto.keyboard.html
         """
         self.verify_actionable()
 
@@ -850,11 +844,7 @@ class BaseWrapper(object):
             # TODO: UIA stuff
             pass
 
-        if self.element_info.handle:
-            win32functions.WaitGuiThreadIdle(self)
-        else:
-            # TODO: get WaitGuiThreadIdle function for elements without handle
-            pass
+        self.wait_for_idle()
 
         self.actions.log('Typed text to the ' + self.friendly_class_name() + ': ' + aligned_keys)
         return self

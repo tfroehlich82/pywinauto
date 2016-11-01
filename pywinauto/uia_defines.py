@@ -1,7 +1,7 @@
 # GUI Application automation and testing library
 # Copyright (C) 2006-2016 Mark Mc Mahon and Contributors
 # https://github.com/pywinauto/pywinauto/graphs/contributors
-# http://pywinauto.github.io/docs/credits.html
+# http://pywinauto.readthedocs.io/en/latest/credits.html
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -87,12 +87,12 @@ class IUIA(object):
 
         for ctrl_type in self._control_types:
             type_id_name = 'UIA_' + ctrl_type + 'ControlTypeId'
-            type_id = self.UIA_dll.__getattribute__(type_id_name)
+            type_id = getattr(self.UIA_dll, type_id_name)
             self.known_control_types[ctrl_type] = type_id
             self.known_control_type_ids[type_id] = ctrl_type
     
     def build_condition(self, process=None, class_name=None, title=None, control_type=None,
-                        is_content_element=None):
+                        content_only=None):
         """Build UIA filtering conditions"""
         conditions = []
         if process:
@@ -112,9 +112,9 @@ class IUIA(object):
             # TODO: CreatePropertyConditionEx with PropertyConditionFlags_IgnoreCase
             conditions.append(self.iuia.CreatePropertyCondition(self.UIA_dll.UIA_NamePropertyId, title))
 
-        if isinstance(is_content_element, bool):
+        if isinstance(content_only, bool):
             conditions.append(self.iuia.CreatePropertyCondition(self.UIA_dll.UIA_IsContentElementPropertyId,
-                                                                is_content_element))
+                                                                content_only))
 
         if len(conditions) > 1:
             return self.iuia.CreateAndConditionFromArray(conditions)
