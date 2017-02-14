@@ -1,5 +1,5 @@
 # GUI Application automation and testing library
-# Copyright (C) 2006-2016 Mark Mc Mahon and Contributors
+# Copyright (C) 2006-2017 Mark Mc Mahon and Contributors
 # https://github.com/pywinauto/pywinauto/graphs/contributors
 # http://pywinauto.readthedocs.io/en/latest/credits.html
 # All rights reserved.
@@ -159,7 +159,7 @@ def is64bitprocess(process_id):
         if phndl:
             is32 = win32process.IsWow64Process(phndl)
             #print("is64bitprocess, is32: %d, procid: %d" % (is32, process_id))
-        
+
     return (not is32)
 
 #=========================================================================

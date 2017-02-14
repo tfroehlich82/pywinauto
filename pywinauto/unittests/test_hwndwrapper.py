@@ -1,5 +1,5 @@
 # GUI Application automation and testing library
-# Copyright (C) 2006-2016 Mark Mc Mahon and Contributors
+# Copyright (C) 2006-2017 Mark Mc Mahon and Contributors
 # https://github.com/pywinauto/pywinauto/graphs/contributors
 # http://pywinauto.readthedocs.io/en/latest/credits.html
 # All rights reserved.
@@ -704,6 +704,7 @@ class WindowWithoutMessageLoopFocusTests(unittest.TestCase):
                                         wait_for_idle=False)
         self.app2 = Application().start(os.path.join(
             mfc_samples_folder, u"CmnCtrl2.exe"))
+        self.app2.wait_cpu_usage_lower(threshold=1.5, timeout=30, usage_interval=1)
 
     def tearDown(self):
         """Close the application after tests"""
@@ -716,6 +717,7 @@ class WindowWithoutMessageLoopFocusTests(unittest.TestCase):
         with one and type in it.
         """
         self.app1.window().set_focus()
+        self.app1.wait_cpu_usage_lower(threshold=1.5, timeout=30, usage_interval=1)
         # pywintypes.error:
         #     (87, 'AttachThreadInput', 'The parameter is incorrect.')
 
@@ -883,6 +885,29 @@ class GetDialogPropsFromHandleTest(unittest.TestCase):
         #unused var: props_from_ctrl = GetDialogPropsFromHandle(self.ctrl)
 
         self.assertEquals(props_from_handle, props_from_dialog)
+
+
+class SendEnterKeyTest(unittest.TestCase):
+    def setUp(self):
+        """Set some data and ensure the application is in the state we want"""
+        Timings.Fast()
+
+        self.app = Application()
+        self.app.start(_notepad_exe())
+
+        self.dlg = self.app.UntitledNotepad
+        self.ctrl = HwndWrapper(self.dlg.Edit.handle)
+
+    def tearDown(self):
+        self.dlg.MenuSelect('File -> Exit')
+        if self.dlg["Do&n't Save"].Exists():
+            self.dlg["Do&n't Save"].Click()
+        self.app.kill_()
+
+
+    def test_sendEnterChar(self):
+        self.ctrl.send_chars('Hello{ENTER}World')
+        self.assertEquals(['Hello\r\nWorld'], self.dlg.Edit.Texts())
 
 
 class RemoteMemoryBlockTests(unittest.TestCase):

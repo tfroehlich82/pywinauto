@@ -1,5 +1,5 @@
 # GUI Application automation and testing library
-# Copyright (C) 2006-2016 Mark Mc Mahon and Contributors
+# Copyright (C) 2006-2017 Mark Mc Mahon and Contributors
 # https://github.com/pywinauto/pywinauto/graphs/contributors
 # http://pywinauto.readthedocs.io/en/latest/credits.html
 # All rights reserved.
@@ -133,14 +133,17 @@ class OwnerDrawnMenuTests(unittest.TestCase):
 
         self.app = Application().Start(os.path.join(mfc_samples_folder, u"BCDialogMenu.exe"))
         self.dlg = self.app.BCDialogMenu
+        self.app.wait_cpu_usage_lower(threshold=1.5, timeout=30, usage_interval=1)
+        self.dlg.wait('ready')
 
     def tearDown(self):
         """Close the application after tests"""
         self.app.kill_()
 
     def testCorrectText(self):
-        self.assertEqual(u'&New', self.dlg.Menu().GetMenuPath('&File->#0')[-1].Text()[:4])
-        self.assertEqual(u'&Open...', self.dlg.Menu().GetMenuPath('&File->#1')[-1].Text()[:8])
+        menu = self.dlg.Menu()
+        self.assertEqual(u'&New', menu.GetMenuPath('&File->#0')[-1].Text()[:4])
+        self.assertEqual(u'&Open...', menu.GetMenuPath('&File->#1')[-1].Text()[:8])
 
 
 if __name__ == "__main__":
