@@ -33,6 +33,7 @@
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import six
 import time
 #import pprint
 #import pdb
@@ -475,6 +476,20 @@ class HwndWrapperTests(unittest.TestCase):
         self.dlg.Set.set_focus()
         self.assertEqual(self.dlg.GetFocus(), self.dlg.Set.handle)
 
+    def test_issue_318(self):
+        self.dlg.restore()
+        self.dlg.minimize()
+        self.dlg.set_focus()
+        self.assertTrue(self.dlg.is_normal())
+        self.assertTrue(self.dlg.is_active())
+
+        self.dlg.maximize()
+        self.dlg.minimize()
+        self.dlg.set_focus()
+        self.assertTrue(self.dlg.is_maximized())
+        self.assertTrue(self.dlg.is_active())
+        self.dlg.restore()
+
     def testSetFocus(self):
         self.assertNotEqual(self.dlg.GetFocus(), self.dlg.Set.handle)
         self.dlg.Set.set_focus()
@@ -489,6 +504,25 @@ class HwndWrapperTests(unittest.TestCase):
         self.assertNotEqual(self.dlg.get_focus(), self.dlg.set.handle)
         self.dlg.set.set_keyboard_focus()
         self.assertEqual(self.dlg.get_focus(), self.dlg.set.handle)
+
+    def test_pretty_print(self):
+        """Test __str__ method for HwndWrapper based controls"""
+        if six.PY3:
+            assert_regex = self.assertRegex
+        else:
+            assert_regex = self.assertRegexpMatches
+
+        wrp = self.dlg.wrapper_object()
+        assert_regex(wrp.__str__(), "^hwndwrapper.DialogWrapper - 'Common Controls Sample', Dialog$")
+        assert_regex(wrp.__repr__(), "^<hwndwrapper.DialogWrapper - 'Common Controls Sample', Dialog, [0-9-]+>$")
+
+        wrp = self.ctrl
+        assert_regex(wrp.__str__(), "^win32_controls.ButtonWrapper - 'Command button here', Button$")
+        assert_regex(wrp.__repr__(), "^<win32_controls.ButtonWrapper - 'Command button here', Button, [0-9-]+>$")
+
+        wrp = self.dlg.TabControl.wrapper_object()
+        assert_regex(wrp.__str__(), "^common_controls.TabControlWrapper - '', TabControl$")
+        assert_regex(wrp.__repr__(), "^<common_controls.TabControlWrapper - '', TabControl, [0-9-]+>$")
 
 
 class HwndWrapperMenuTests(unittest.TestCase):
