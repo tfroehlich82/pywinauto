@@ -322,6 +322,19 @@ class UIAWrapper(BaseWrapper):
         return props
 
     # ------------------------------------------------------------
+    def legacy_properties(self):
+        """Get the element's LegacyIAccessible control pattern interface properties"""
+        elem = self.element_info.element
+        impl = uia_defs.get_elem_interface(elem, "LegacyIAccessible")
+        property_name_identifier = 'Current'
+
+        interface_properties = [prop for prop in dir(LegacyIAccessiblePattern)
+                                if (isinstance(getattr(LegacyIAccessiblePattern, prop), property)
+                                and property_name_identifier in prop)]
+
+        return {prop.replace(property_name_identifier, '') : getattr(impl, prop) for prop in interface_properties}
+
+    # ------------------------------------------------------------
     def friendly_class_name(self):
         """
         Return the friendly class name for the control
@@ -375,8 +388,14 @@ class UIAWrapper(BaseWrapper):
         If it doesn't (menu shadows, tooltips,...), try to send "Esc" key
         """
         try:
+            name = self.element_info.name
+            control_type = self.element_info.control_type
+
             iface = self.iface_window
             iface.Close()
+
+            if name and control_type:
+                self.actions.log("Closed " + control_type.lower() + ' "' +  name + '"')
         except(uia_defs.NoPatternInterfaceError):
             self.type_keys("{ESC}")
 
@@ -418,8 +437,13 @@ class UIAWrapper(BaseWrapper):
     # -----------------------------------------------------------
     def invoke(self):
         """An interface to the Invoke method of the Invoke control pattern"""
+        name = self.element_info.name
+        control_type = self.element_info.control_type
+
         self.iface_invoke.Invoke()
 
+        if name and control_type:
+            self.actions.log("Invoked " + control_type.lower() + ' "' +  name + '"')
         # Return itself to allow action chaining
         return self
 
@@ -509,6 +533,11 @@ class UIAWrapper(BaseWrapper):
         or a list item.
         """
         self.iface_selection_item.Select()
+
+        name = self.element_info.name
+        control_type = self.element_info.control_type
+        if name and control_type:
+            self.actions.log("Selected " + control_type.lower() + ' "' +  name + '"')
 
         # Return itself so that action can be chained
         return self

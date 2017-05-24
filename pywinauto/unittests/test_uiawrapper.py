@@ -265,6 +265,24 @@ if UIA_support:
             #     img2 = self.dlg.capture_as_image()
             #     self.assertEqual(img2.getpixel((0, 0)), (0, 0, 255))  # blue
 
+        def test_get_legacy_properties(self):
+            """Test getting legacy properties of a control"""
+            expected_properties = {'Value' : '',
+                                   'DefaultAction': 'Press',
+                                   'Description': '',
+                                   'Name': 'OK',
+                                   'Help': '',
+                                   'ChildId': 0,
+                                   'KeyboardShortcut': '',
+                                   'State': 1048576,
+                                   'Role': 43}
+            button_wrp = self.dlg.window(class_name="Button",
+                                       title="OK").wrapper_object()
+
+            actual_properties = button_wrp.legacy_properties()
+
+            self.assertEqual(actual_properties, expected_properties)
+
     class UIAWrapperMouseTests(unittest.TestCase):
 
         """Unit tests for mouse actions of the UIAWrapper class"""
@@ -491,6 +509,10 @@ if UIA_support:
             self.assertEqual(combo_box.item_count(), len(ref_texts))
             for t in combo_box.texts():
                 self.assertEqual((t in ref_texts), True)
+
+            # Mock a combobox without "ExpandCollapse" pattern
+            combo_box.expand = mock.Mock(side_effect=uia_defs.NoPatternInterfaceError())  # empty texts
+            self.assertEqual(combo_box.texts(), [])
 
         def test_combobox_select(self):
             """Test select related methods for the combo box control"""
