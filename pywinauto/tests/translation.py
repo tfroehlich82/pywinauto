@@ -1,5 +1,5 @@
 # GUI Application automation and testing library
-# Copyright (C) 2006-2017 Mark Mc Mahon and Contributors
+# Copyright (C) 2006-2018 Mark Mc Mahon and Contributors
 # https://github.com/pywinauto/pywinauto/graphs/contributors
 # http://pywinauto.readthedocs.io/en/latest/credits.html
 # All rights reserved.
@@ -113,7 +113,7 @@ def _GetUntranslations(win):
     """Find the text items that are not translated"""
     # remove ampersands and other non translatable bits from the string
     nonTransChars = re.compile(
-        """(\&(?!\&)|	# ampersand not followed by an ampersand
+        r"""(\&(?!\&)|	# ampersand not followed by an ampersand
             \.\.\.$|	# elipsis ...
             ^\s*|		# leading whitespace
             \s*$|		# trailing whitespace

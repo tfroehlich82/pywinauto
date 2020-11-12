@@ -1,7 +1,7 @@
 ====================
 What is pywinauto
 ====================
-© Mark Mc Mahon and Contributors_, 2006-2016
+© Mark Mc Mahon and Contributors_, 2006-2018
 
 .. _Contributors: https://github.com/pywinauto/pywinauto/graphs/contributors
 
@@ -11,13 +11,13 @@ Released under the BSD 3-clause license
 What is it?
 -----------
 pywinauto is a set of python modules to automate the Microsoft Windows GUI.
-At it's simplest it allows you to send mouse and keyboard actions to windows
+At its simplest it allows you to send mouse and keyboard actions to windows
 dialogs and controls.
 
 
 Installation
 ------------
-- Just run ``pip install pywinauto``
+pywinauto can be installed with pip and conda. Run ``pip install pywinauto`` or ``conda install -c conda-forge pywinauto``.
 
 
 Manual installation
@@ -33,7 +33,7 @@ Manual installation
 - Unpack and run ``python setup.py install``
 
 
-.. _pyWin32: http://sourceforge.net/projects/pywin32/files/pywin32/Build%20220/
+.. _pyWin32: https://github.com/mhammond/pywin32/releases
 .. _comtypes: https://github.com/enthought/comtypes/releases
 .. _six: https://pypi.python.org/pypi/six
 .. _Pillow: https://pypi.python.org/pypi/Pillow/2.7.0
@@ -48,6 +48,11 @@ Run Python ::
 
 How does it work
 ----------------
+The core concept is described in the `Getting Started Guide`_.
+
+.. _`Getting Started Guide`: getting_started.html
+
+
 A lot is done through attribute access (``__getattribute__``) for each class. For example
 when you get the attribute of an Application or Dialog object it looks for a
 dialog or control (respectively).

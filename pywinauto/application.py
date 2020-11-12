@@ -1,5 +1,5 @@
 # GUI Application automation and testing library
-# Copyright (C) 2006-2017 Mark Mc Mahon and Contributors
+# Copyright (C) 2006-2018 Mark Mc Mahon and Contributors
 # https://github.com/pywinauto/pywinauto/graphs/contributors
 # http://pywinauto.readthedocs.io/en/latest/credits.html
 # All rights reserved.
@@ -65,12 +65,13 @@ in almost exactly the same ways. ::
 from __future__ import print_function
 
 import sys
-import os.path
+import os
 import pickle
 import time
 import warnings
 import multiprocessing
 import locale
+import codecs
 
 import win32process
 import win32api
@@ -79,16 +80,18 @@ import win32con
 import win32event
 import six
 
-from pywinauto import timings
+from . import timings
 from . import controls
 from . import findbestmatch
 from . import findwindows
 from . import handleprops
+from . import win32defines
 from .backend import registry
 
 from .actionlogger import ActionLogger
 from .timings import Timings, wait_until, TimeoutError, wait_until_passes
 from .sysinfo import is_x64_Python
+from . import deprecated
 
 
 class AppStartError(Exception):
@@ -138,44 +141,51 @@ class WindowSpecification(object):
                          'active': ('is_active',),
                          }
 
-    def __init__(self, search_criteria):
+    def __init__(self, search_criteria, allow_magic_lookup=True):
         """
         Initialize the class
 
         :param search_criteria: the criteria to match a dialog
+        :param allow_magic_lookup: whether attribute access must turn into child_window(best_match=...) search as fallback
         """
         # kwargs will contain however to find this window
         if 'backend' not in search_criteria:
             search_criteria['backend'] = registry.active_backend.name
+        if 'process' in search_criteria and 'app' in search_criteria:
+            raise KeyError('Keywords "process" and "app" cannot be combined (ambiguous). ' \
+                'Use one option at a time: Application object with keyword "app" or ' \
+                'integer process ID with keyword "process".')
+        self.app = search_criteria.get('app', None)
         self.criteria = [search_criteria, ]
         self.actions = ActionLogger()
         self.backend = registry.backends[search_criteria['backend']]
+        self.allow_magic_lookup = allow_magic_lookup
 
         if self.backend.name == 'win32':
             # Non PEP-8 aliases for partial backward compatibility
-            self.WrapperObject = self.wrapper_object
-            self.ChildWindow = self.child_window
-            self.Exists = self.exists
-            self.Wait = self.wait
-            self.WaitNot = self.wait_not
-            self.PrintControlIdentifiers = self.print_control_identifiers
+            self.WrapperObject = deprecated(self.wrapper_object)
+            self.ChildWindow = deprecated(self.child_window)
+            self.Exists = deprecated(self.exists)
+            self.Wait = deprecated(self.wait)
+            self.WaitNot = deprecated(self.wait_not)
+            self.PrintControlIdentifiers = deprecated(self.print_control_identifiers)
 
-            self.Window_ = self.window
-            self.window_ = self.window
-            self.Window = self.window
+            self.Window = deprecated(self.child_window, deprecated_name='Window')
+            self.Window_ = deprecated(self.child_window, deprecated_name='Window_')
+            self.window_ = deprecated(self.child_window, deprecated_name='window_')
 
     def __call__(self, *args, **kwargs):
-        """No __call__ so return a usefull error"""
+        """No __call__ so return a useful error"""
         if "best_match" in self.criteria[-1]:
-            raise AttributeError(
-                "WindowSpecification class has no '{0}' method".
+            raise AttributeError("Neither GUI element (wrapper) " \
+                "nor wrapper method '{0}' were found (typo?)".
                 format(self.criteria[-1]['best_match']))
 
         message = (
             "You tried to execute a function call on a WindowSpecification "
             "instance. You probably have a typo for one of the methods of "
-            "this class.\n"
-            "The criteria leading up to this is: " + str(self.criteria))
+            "this class or of the targeted wrapper object.\n"
+            "The criteria leading up to this are: " + str(self.criteria))
 
         raise AttributeError(message)
 
@@ -186,6 +196,10 @@ class WindowSpecification(object):
         # find the dialog
         if 'backend' not in criteria[0]:
             criteria[0]['backend'] = self.backend.name
+        if self.app is not None:
+            # find_elements(...) accepts only "process" argument
+            criteria[0]['process'] = self.app.process
+            del criteria[0]['app']
         dialog = self.backend.generic_wrapper_class(findwindows.find_element(**criteria[0]))
 
         ctrls = []
@@ -265,7 +279,7 @@ class WindowSpecification(object):
         if 'top_level_only' not in criteria:
             criteria['top_level_only'] = False
 
-        new_item = WindowSpecification(self.criteria[0])
+        new_item = WindowSpecification(self.criteria[0], allow_magic_lookup=self.allow_magic_lookup)
         new_item.criteria.extend(self.criteria[1:])
         new_item.criteria.append(criteria)
 
@@ -295,7 +309,7 @@ class WindowSpecification(object):
         """
         # if we already have 2 levels of criteria (dlg, control)
         # then resolve the control and do a getitem on it for the
-        if len(self.criteria) >= 2:
+        if len(self.criteria) >= 2:  # FIXME - this is surprising
 
             ctrls = self.__resolve_control(self.criteria)
 
@@ -312,7 +326,7 @@ class WindowSpecification(object):
 
         # if we get here then we must have only had one criteria so far
         # so create a new :class:`WindowSpecification` for this control
-        new_item = WindowSpecification(self.criteria[0])
+        new_item = WindowSpecification(self.criteria[0], allow_magic_lookup=self.allow_magic_lookup)
 
         # add our new criteria
         new_item.criteria.append({"best_match": key})
@@ -333,6 +347,21 @@ class WindowSpecification(object):
         Otherwise delegate functionality to :func:`__getitem__` - which
         sets the appropriate criteria for the control.
         """
+        allow_magic_lookup = object.__getattribute__(self, "allow_magic_lookup")  # Beware of recursions here!
+        if not allow_magic_lookup:
+            try:
+                return object.__getattribute__(self, attr_name)
+            except AttributeError:
+                wrapper_object = self.wrapper_object()
+                try:
+                    return getattr(wrapper_object, attr_name)
+                except AttributeError:
+                    message = (
+                        'Attribute "%s" exists neither on %s object nor on'
+                        'targeted %s element wrapper (typo? or set allow_magic_lookup to True?)' %
+                        (attr_name, self.__class__, wrapper_object.__class__))
+                    raise AttributeError(message)
+
         if attr_name in ['__dict__', '__members__', '__methods__', '__class__', '__name__']:
             return object.__getattribute__(self, attr_name)
 
@@ -342,10 +371,10 @@ class WindowSpecification(object):
         if attr_name in self.__dict__:
             return self.__dict__[attr_name]
 
-        # if we already have 2 levels of criteria (dlg, conrol)
+        # if we already have 2 levels of criteria (dlg, control)
         # this third must be an attribute so resolve and get the
         # attribute and return it
-        if len(self.criteria) >= 2:
+        if len(self.criteria) >= 2:  # FIXME - this is surprising
 
             ctrls = self.__resolve_control(self.criteria)
 
@@ -354,6 +383,7 @@ class WindowSpecification(object):
             except AttributeError:
                 return self.child_window(best_match=attr_name)
         else:
+            # FIXME - I don't get this part at all, why is it win32-specific and why not keep the same logic as above?
             # if we have been asked for an attribute of the dialog
             # then resolve the window and return the attribute
             desktop_wrapper = self.backend.generic_wrapper_class(self.backend.element_info_class())
@@ -578,7 +608,6 @@ class WindowSpecification(object):
                referred to as "Edit2".
         """
         if depth is None:
-            # TODO: think about marking incomplete subtree for depths like 1 or 2
             depth = sys.maxsize
         # Wrap this control
         this_ctrl = self.__resolve_control(self.criteria)[-1]
@@ -586,13 +615,20 @@ class WindowSpecification(object):
         # Create a list of this control and all its descendants
         all_ctrls = [this_ctrl, ] + this_ctrl.descendants()
 
-        # build the list of disambiguated list of control names
-        name_control_map = findbestmatch.build_unique_dict(all_ctrls)
+        # Create a list of all visible text controls
+        txt_ctrls = [ctrl for ctrl in all_ctrls if ctrl.can_be_label and ctrl.is_visible() and ctrl.window_text()]
 
-        # swap it around so that we are mapped off the controls
-        control_name_map = {}
-        for name, control in name_control_map.items():
-            control_name_map.setdefault(control, []).append(name)
+        # Build a dictionary of disambiguated list of control names
+        name_ctrl_id_map = findbestmatch.UniqueDict()
+        for index, ctrl in enumerate(all_ctrls):
+            ctrl_names = findbestmatch.get_control_names(ctrl, all_ctrls, txt_ctrls)
+            for name in ctrl_names:
+                name_ctrl_id_map[name] = index
+
+        # Swap it around so that we are mapped off the control indices
+        ctrl_id_name_map = {}
+        for name, index in name_ctrl_id_map.items():
+            ctrl_id_name_map.setdefault(index, []).append(name)
 
         def print_identifiers(ctrls, current_depth=1, log_func=print):
             """Recursively print ids for ctrls and their descendants in a tree-like format"""
@@ -601,7 +637,9 @@ class WindowSpecification(object):
 
             indent = (current_depth - 1) * u"   | "
             for ctrl in ctrls:
-                if ctrl not in control_name_map.keys():
+                try:
+                    ctrl_id = all_ctrls.index(ctrl)
+                except ValueError:
                     continue
                 ctrl_text = ctrl.window_text()
                 if ctrl_text:
@@ -613,7 +651,7 @@ class WindowSpecification(object):
                     "".format(class_name=ctrl.friendly_class_name(),
                               text=ctrl_text,
                               rect=ctrl.rectangle())
-                output += indent + u'{}\n'.format(control_name_map[ctrl])
+                output += indent + u'{}'.format(ctrl_id_name_map[ctrl_id])
 
                 title = ctrl_text
                 class_name = ctrl.class_name()
@@ -623,7 +661,10 @@ class WindowSpecification(object):
                     auto_id = ctrl.element_info.automation_id
                 if hasattr(ctrl.element_info, 'control_type'):
                     control_type = ctrl.element_info.control_type
-                    class_name = None  # no need for class_name if control_type exists
+                    if control_type:
+                        class_name = None  # no need for class_name if control_type exists
+                    else:
+                        control_type = None # if control_type is empty, still use class_name instead
                 criteria_texts = []
                 if title:
                     criteria_texts.append(u'title="{}"'.format(title))
@@ -634,7 +675,7 @@ class WindowSpecification(object):
                 if control_type:
                     criteria_texts.append(u'control_type="{}"'.format(control_type))
                 if title or class_name or auto_id:
-                    output += indent + u'child_window(' + u', '.join(criteria_texts) + u')'
+                    output += u'\n' + indent + u'child_window(' + u', '.join(criteria_texts) + u')'
 
                 if six.PY3:
                     log_func(output)
@@ -647,7 +688,8 @@ class WindowSpecification(object):
             print("Control Identifiers:")
             print_identifiers([this_ctrl, ])
         else:
-            log_file = open(filename, "w")
+            log_file = codecs.open(filename, "w", locale.getpreferredencoding())
+
             def log_func(msg):
                 log_file.write(str(msg) + os.linesep)
             log_func("Control Identifiers:")
@@ -846,7 +888,7 @@ class Application(object):
     .. automethod:: __getitem__
     """
 
-    def __init__(self, backend="win32", datafilename=None):
+    def __init__(self, backend="win32", datafilename=None, allow_magic_lookup=True):
         """
         Initialize the Application object
 
@@ -862,16 +904,19 @@ class Application(object):
         if backend not in registry.backends:
             raise ValueError('Backend "{0}" is not registered!'.format(backend))
         self.backend = registry.backends[backend]
+        self.allow_magic_lookup = allow_magic_lookup
         if self.backend.name == 'win32':
             # Non PEP-8 aliases for partial backward compatibility
-            self.Start = self.start
-            self.Connect = self.connect
-            self.CPUUsage = self.cpu_usage
-            self.WaitCPUUsageLower = self.wait_cpu_usage_lower
-            self.top_window_ = self.top_window
-            self.active_ = self.active
-            self.Windows_ = self.windows_ = self.windows
-            self.Window_ = self.window_ = self.window
+            self.Start = deprecated(self.start)
+            self.Connect = deprecated(self.connect)
+            self.CPUUsage = deprecated(self.cpu_usage)
+            self.WaitCPUUsageLower = deprecated(self.wait_cpu_usage_lower, deprecated_name='WaitCPUUsageLower')
+            self.top_window_ = deprecated(self.top_window, deprecated_name='top_window_')
+            self.active_ = deprecated(self.active, deprecated_name='active_')
+            self.Windows_ = deprecated(self.windows, deprecated_name='Windows_')
+            self.windows_ = deprecated(self.windows, deprecated_name='windows_')
+            self.Window_ = deprecated(self.window, deprecated_name='Window_')
+            self.window_ = deprecated(self.window, deprecated_name='window_')
 
         # load the match history if a file was specifed
         # and it exists
@@ -879,6 +924,10 @@ class Application(object):
             with open(datafilename, "rb") as datafile:
                 self.match_history = pickle.load(datafile)
             self.use_history = True
+
+    def __iter__(self):
+        """Raise to avoid infinite loops"""
+        raise NotImplementedError("Object is not iterable, try to use .windows()")
 
     def connect(self, **kwargs):
         """Connect to an already running process
@@ -895,15 +944,20 @@ class Application(object):
            :func:`pywinauto.findwindows.find_elements` - the keyword arguments that
            are also can be used instead of **process**, **handle** or **path**
         """
-
-        timeout = None
-        if 'timeout' in kwargs:
+        timeout = Timings.app_connect_timeout
+        retry_interval = Timings.app_connect_retry
+        if 'timeout' in kwargs and kwargs['timeout'] is not None:
             timeout = kwargs['timeout']
+        if 'retry_interval' in kwargs and kwargs['retry_interval'] is not None:
+            retry_interval = kwargs['retry_interval']
 
         connected = False
         if 'process' in kwargs:
             self.process = kwargs['process']
-            assert_valid_process(self.process)
+            try:
+                wait_until(timeout, retry_interval, self.is_process_running, value=True)
+            except TimeoutError:
+                raise ProcessNotFoundError('Process with PID={} not found!'.format(self.process))
             connected = True
 
         elif 'handle' in kwargs:
@@ -918,32 +972,47 @@ class Application(object):
             connected = True
 
         elif 'path' in kwargs:
-            if timeout is None:
-                self.process = process_from_module(kwargs['path'])
-            else:
+            try:
                 self.process = timings.wait_until_passes(
-                    timeout, 0, process_from_module, ProcessNotFoundError, kwargs['path'])
+                        timeout, retry_interval, process_from_module,
+                        ProcessNotFoundError, kwargs['path'],
+                    )
+            except TimeoutError:
+                raise ProcessNotFoundError('Process "{}" not found!'.format(kwargs['path']))
             connected = True
 
         elif kwargs:
             kwargs['backend'] = self.backend.name
-            self.process = findwindows.find_element(**kwargs).process_id
+            if 'visible_only' not in kwargs:
+                kwargs['visible_only'] = False
+            if 'timeout' in kwargs:
+                del kwargs['timeout']
+                self.process = timings.wait_until_passes(
+                        timeout, retry_interval, findwindows.find_element,
+                        exceptions=(findwindows.ElementNotFoundError, findbestmatch.MatchError,
+                                    controls.InvalidWindowHandle, controls.InvalidElement),
+                        *(), **kwargs
+                    ).process_id
+            else:
+                self.process = findwindows.find_element(**kwargs).process_id
             connected = True
 
         if not connected:
             raise RuntimeError(
-                "You must specify one of process, handle or path")
-        else:
-            if 'path' not in kwargs and 'timeout' in kwargs:
-                raise ValueError('Timeout could be specified with path param only')
+                "You must specify some of process, handle, path or window search criteria.")
 
         if self.backend.name == 'win32':
             self.__warn_incorrect_bitness()
 
+            if not handleprops.has_enough_privileges(self.process):
+                warning_text = "Python process has no rights to make changes " \
+                    "in the target GUI (run the script as Administrator)"
+                warnings.warn(warning_text, UserWarning)
+
         return self
 
     def start(self, cmd_line, timeout=None, retry_interval=None,
-              create_new_console=False, wait_for_idle=True):
+              create_new_console=False, wait_for_idle=True, work_dir=None):
         """Start the application as specified by cmd_line"""
         # try to parse executable name and check it has correct bitness
         if '.exe' in cmd_line and self.backend.name == 'win32':
@@ -974,7 +1043,7 @@ class Application(object):
                 0, 						# Set handle inheritance to FALSE.
                 dw_creation_flags,		# Creation flags.
                 None, 					# Use parent's environment block.
-                None, 					# Use parent's starting directory.
+                work_dir,				# If None - use parent's starting directory.
                 start_info)				# STARTUPINFO structure.
         except Exception as exc:
             # if it failed for some reason
@@ -1061,10 +1130,10 @@ class Application(object):
         if timeout is None:
             timeout = Timings.cpu_usage_wait_timeout
 
-        start_time = time.time()
+        start_time = timings.timestamp()
 
         while self.cpu_usage(usage_interval) > threshold:
-            if time.time() - start_time > timeout:
+            if timings.timestamp() - start_time > timeout:
                 raise RuntimeError('Waiting CPU load <= {}% timed out!'.format(threshold))
 
         return self
@@ -1093,7 +1162,7 @@ class Application(object):
         else:
             criteria['title'] = windows[0].name
 
-        return WindowSpecification(criteria)
+        return WindowSpecification(criteria, allow_magic_lookup=self.allow_magic_lookup)
 
     def active(self):
         """Return WindowSpecification for an active window of the application"""
@@ -1117,7 +1186,7 @@ class Application(object):
         else:
             criteria['title'] = windows[0].name
 
-        return WindowSpecification(criteria)
+        return WindowSpecification(criteria, allow_magic_lookup=self.allow_magic_lookup)
 
     def windows(self, **kwargs):
         """Return a list of wrapped top level windows of the application"""
@@ -1157,9 +1226,9 @@ class Application(object):
             raise AppNotConnected("Please use start or connect before trying "
                                   "anything else")
         else:
-            # add the restriction for this particular process
-            kwargs['process'] = self.process
-            win_spec = WindowSpecification(kwargs)
+            # add the restriction for this particular application
+            kwargs['app'] = self
+            win_spec = WindowSpecification(kwargs, allow_magic_lookup=self.allow_magic_lookup)
 
         return win_spec
     Window_ = window_ = window
@@ -1170,11 +1239,22 @@ class Application(object):
         return self.window(best_match=key)
 
     def __getattribute__(self, attr_name):
+        allow_magic_lookup = object.__getattribute__(self, "allow_magic_lookup")  # Beware of recursions here!
+        if not allow_magic_lookup:
+            try:
+                return object.__getattribute__(self, attr_name)
+            except AttributeError:
+                message = (
+                    'Attribute "%s" doesn\'t exist on %s object'
+                    ' (typo? or set allow_magic_lookup to True?)' %
+                    (attr_name, self.__class__))
+                raise AttributeError(message)
+
         """Find the specified dialog of the application"""
         if attr_name in ['__dict__', '__members__', '__methods__', '__class__']:
             return object.__getattribute__(self, attr_name)
 
-        if attr_name in dir(Application):
+        if attr_name in dir(self.__class__):
             return object.__getattribute__(self, attr_name)
 
         if attr_name in self.__dict__:
@@ -1192,29 +1272,29 @@ class Application(object):
         """Should not be used - part of application data implementation"""
         return self.match_history[index]
 
-    def kill(self):
+    def kill(self, soft=False):
         """
-        Try to close and kill the application
+        Try to close (optional) and kill the application
 
         Dialogs may pop up asking to save data - but the application
         will be killed anyway - you will not be able to click the buttons.
         This should only be used when it is OK to kill the process like you
         would do in task manager.
         """
-        windows = self.windows(visible_only=True)
+        if soft:
+            windows = self.windows(visible_only=True)
 
-        for win in windows:
+            for win in windows:
+                try:
+                    if hasattr(win, 'close'):
+                        win.close()
+                        continue
+                except TimeoutError:
+                    self.actions.log('Failed to close top level window')
 
-            try:
-                if hasattr(win, 'close'):
-                    win.close()
-                    continue
-            except TimeoutError:
-                self.actions.log('Failed to close top level window')
-
-            if hasattr(win, 'force_close'):
-                self.actions.log('application.kill: call win.force_close')
-                win.force_close()
+                if hasattr(win, 'force_close'):
+                    self.actions.log('Application.kill: call win.force_close()')
+                    win.force_close()
 
         try:
             process_wait_handle = win32api.OpenProcess(
@@ -1226,18 +1306,54 @@ class Application(object):
 
         # so we have either closed the windows - or the app is hung
         killed = True
-        if process_wait_handle:
-            try:
-                win32api.TerminateProcess(process_wait_handle, 0)
-            except win32gui.error:
-                self.actions.log('Process {0} seems already killed'.format(self.process))
+        try:
+            if process_wait_handle:
+                try:
+                    win32api.TerminateProcess(process_wait_handle, 0)
+                except win32gui.error:
+                    self.actions.log('Process {0} seems already killed'.format(self.process))
+        finally:
+            win32api.CloseHandle(process_wait_handle)
 
-        win32api.CloseHandle(process_wait_handle)
-
+        self.wait_for_process_exit()
         return killed
 
     # Non PEP-8 aliases
-    kill_ = Kill_ = kill
+    kill_ = deprecated(kill, deprecated_name='kill_')
+    Kill_ = deprecated(kill, deprecated_name='Kill_')
+
+    def is_process_running(self):
+        """
+        Check that process is running.
+
+        Can be called before start/connect.
+
+        Return True if process is running otherwise - False.
+        """
+        is_running = False
+        try:
+            h_process = win32api.OpenProcess(
+                win32con.PROCESS_QUERY_INFORMATION,
+                0,
+                self.process)
+            is_running = win32process.GetExitCodeProcess(
+                h_process) == win32defines.PROCESS_STILL_ACTIVE
+        except (win32gui.error, TypeError):
+            is_running = False
+        return is_running
+
+    def wait_for_process_exit(self, timeout=None, retry_interval=None):
+        """
+        Waits for process to exit until timeout reaches
+
+        Raises TimeoutError exception if timeout was reached
+        """
+        if timeout is None:
+            timeout = Timings.app_exit_timeout
+        if retry_interval is None:
+            retry_interval = Timings.app_exit_retry
+
+        wait_until(timeout, retry_interval, self.is_process_running, value=False)
 
 
 #=========================================================================
@@ -1251,6 +1367,14 @@ def assert_valid_process(process_id):
     if not process_handle:
         message = "Process with ID '%d' could not be opened" % process_id
         raise ProcessNotFoundError(message)
+
+    # finished process can still exist and have exit code,
+    # but it's not usable any more, so let's check it
+    exit_code = win32process.GetExitCodeProcess(process_handle)
+    is_running = (exit_code == win32defines.PROCESS_STILL_ACTIVE)
+    if not is_running:
+        raise ProcessNotFoundError('Process with pid = {} has been already ' \
+            'finished with exit code = {}'.format(process_id, exit_code))
 
     return process_handle
 

@@ -9,7 +9,7 @@ if sys.platform == 'win32':
     import win32clipboard
     sys.path.append(".")
     from pywinauto.application import Application
-    from pywinauto.keyboard import SendKeys
+    from pywinauto.keyboard import send_keys
     from pywinauto import mouse
     from pywinauto.timings import Timings
 else:
@@ -20,7 +20,7 @@ else:
     import mouse
     send_keys_dir = os.path.join(parent_dir, r"linux")
     sys.path.insert(0, send_keys_dir)
-    from keyboard import SendKeys
+    from keyboard import send_keys
     import clipboard
 
 
@@ -41,7 +41,7 @@ class MouseTests(unittest.TestCase):
     def setUp(self):
         """Set some data and ensure the application is in the state we want"""
         if sys.platform == 'win32':
-            Timings.Defaults()
+            Timings.defaults()
             self.app = Application()
             self.app.start(_test_app())
             self.dlg = self.app.mousebuttons
@@ -51,10 +51,7 @@ class MouseTests(unittest.TestCase):
             time.sleep(1)
 
     def tearDown(self):
-        if sys.platform == 'win32':
-            self.app.kill_()
-        else:
-            self.app.kill()
+        self.app.kill()
 
     def __get_pos(self, shift):
         if sys.platform == 'win32':
@@ -65,13 +62,12 @@ class MouseTests(unittest.TestCase):
             root = self.display.screen().root
             left_pos = root.get_geometry().width / 2
             top_pos = root.get_geometry().height / 2
-            return left_pos-shift, top_pos-shift
+            return left_pos - shift, top_pos - shift
 
     def __get_text(self):
         data = ''
         time.sleep(1)
-        SendKeys('^a')
-        SendKeys('^c')
+        send_keys('^a^c', pause=0.2)
         if sys.platform == 'win32':
             win32clipboard.OpenClipboard()
             data = win32clipboard.GetClipboardData()
@@ -80,17 +76,14 @@ class MouseTests(unittest.TestCase):
             data = clipboard.get_data()
         return data
 
-    def test_position(self):
+    def test_left_click(self):
         left, top = self.__get_pos(50)
-        print(left, top)
         mouse.click(coords=(left, top))
+        print(left, top)
         data = self.__get_text()
+        print(data)
         self.assertTrue(str(int(top)) in data)
         self.assertTrue(str(int(left)) in data)
-
-    def test_click(self):
-        mouse.click(coords=(self.__get_pos(50)))
-        data = self.__get_text()
         self.assertTrue("LeftButton" in data)
         self.assertTrue("Mouse Press" in data)
         self.assertTrue("Mouse Release" in data)

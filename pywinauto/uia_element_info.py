@@ -1,5 +1,5 @@
 # GUI Application automation and testing library
-# Copyright (C) 2006-2017 Mark Mc Mahon and Contributors
+# Copyright (C) 2006-2018 Mark Mc Mahon and Contributors
 # https://github.com/pywinauto/pywinauto/graphs/contributors
 # http://pywinauto.readthedocs.io/en/latest/credits.html
 # All rights reserved.
@@ -32,7 +32,8 @@
 """Implementation of the class to deal with an UI element (based on UI Automation API)"""
 
 from comtypes import COMError
-from six import integer_types
+from six import integer_types, text_type
+from ctypes.wintypes import tagPOINT
 
 from .uia_defines import IUIA
 from .uia_defines import get_elem_interface
@@ -40,17 +41,24 @@ from .uia_defines import get_elem_interface
 from .handleprops import dumpwindow, controlid
 from .element_info import ElementInfo
 from .win32structures import RECT
+from .actionlogger import ActionLogger
 
 
-def elements_from_uia_array(ptrs, cache_enable = False):
+def elements_from_uia_array(ptrs, cache_enable=False):
     """Build a list of UIAElementInfo elements from IUIAutomationElementArray"""
-    return [UIAElementInfo(ptrs.GetElement(n), cache_enable) for n in range(ptrs.Length)]
+    elements = []
+    for n in range(ptrs.Length):
+        try:
+            elements.append(UIAElementInfo(ptrs.GetElement(n), cache_enable))
+        except COMError:
+            continue
+    return elements
 
 
 class UIAElementInfo(ElementInfo):
     """UI element wrapper for IUIAutomation API"""
 
-    def __init__(self, handle_or_elem = None, cache_enable = False):
+    def __init__(self, handle_or_elem=None, cache_enable=False):
         """
         Create an instance of UIAElementInfo from a handle (int or long)
         or from an IUIAutomationElement.
@@ -65,19 +73,20 @@ class UIAElementInfo(ElementInfo):
                 self._element = handle_or_elem
             else:
                 raise TypeError("UIAElementInfo object can be initialized " + \
-                    "with integer or IUIAutomationElement instance only!")
+                                "with integer or IUIAutomationElement instance only!")
         else:
             self._element = IUIA().root
- 
-        self.set_cache_strategy(cached = cache_enable)
+
+        self.set_cache_strategy(cached=cache_enable)
 
     def _get_current_class_name(self):
         """Return an actual class name of the element"""
         try:
-            return self._element.CurrentClassName
+            cn = self._element.CurrentClassName
+            return text_type('') if cn is None else cn
         except COMError:
-            return None # probably element already doesn't exist
-    
+            return text_type('')  # probably element already doesn't exist
+
     def _get_cached_class_name(self):
         """Return a cached class name of the element"""
         if self._cached_class_name is None:
@@ -89,7 +98,7 @@ class UIAElementInfo(ElementInfo):
         try:
             return self._element.CurrentNativeWindowHandle
         except COMError:
-            return None # probably element already doesn't exist
+            return None  # probably element already doesn't exist
 
     def _get_cached_handle(self):
         """Return a cached handle of the element"""
@@ -102,7 +111,7 @@ class UIAElementInfo(ElementInfo):
         try:
             return IUIA().known_control_type_ids[self._element.CurrentControlType]
         except COMError:
-            return None # probably element already doesn't exist
+            return None  # probably element already doesn't exist
 
     def _get_cached_control_type(self):
         """Return a cached control type of the element"""
@@ -113,9 +122,10 @@ class UIAElementInfo(ElementInfo):
     def _get_current_name(self):
         """Return an actual name of the element"""
         try:
-            return self._element.CurrentName
+            n = self._element.CurrentName
+            return text_type('') if n is None else n
         except COMError:
-            return None # probably element already doesn't exist
+            return text_type('')  # probably element already doesn't exist
 
     def _get_cached_name(self):
         """Return a cached name of the element"""
@@ -128,7 +138,7 @@ class UIAElementInfo(ElementInfo):
         try:
             return bool(not self._element.CurrentIsOffscreen)
         except COMError:
-            return False # probably element already doesn't exist
+            return False  # probably element already doesn't exist
 
     def _get_cached_visible(self):
         """Return a cached visible property of the element"""
@@ -144,7 +154,7 @@ class UIAElementInfo(ElementInfo):
             pattern = get_elem_interface(self._element, "Text")
             return pattern.DocumentRange.GetText(-1)
         except Exception:
-            return self.name # TODO: probably we should raise an exception here
+            return self.name  # TODO: probably we should raise an exception here
 
     def _get_cached_rich_text(self):
         """Return the cached rich_text of the element"""
@@ -152,7 +162,7 @@ class UIAElementInfo(ElementInfo):
             self._cached_rich_text = self._get_current_rich_text()
         return self._cached_rich_text
 
-    def set_cache_strategy(self, cached = None):
+    def set_cache_strategy(self, cached=None):
         """Setup a cache strategy for frequently used attributes"""
         if cached is True:
             # Refresh cached attributes
@@ -190,7 +200,7 @@ class UIAElementInfo(ElementInfo):
         try:
             return self._element.CurrentAutomationId
         except COMError:
-            return None # probably element already doesn't exist
+            return None  # probably element already doesn't exist
 
     @property
     def control_id(self):
@@ -206,7 +216,7 @@ class UIAElementInfo(ElementInfo):
         try:
             return self._element.CurrentProcessId
         except COMError:
-            return None # probably element already doesn't exist
+            return None  # probably element already doesn't exist
 
     @property
     def framework_id(self):
@@ -214,12 +224,15 @@ class UIAElementInfo(ElementInfo):
         try:
             return self._element.CurrentFrameworkId
         except COMError:
-            return None # probably element already doesn't exist
+            return None  # probably element already doesn't exist
 
     @property
     def runtime_id(self):
         """Return Runtime ID (hashable value but may be different from run to run)"""
-        return self._element.GetRuntimeId()
+        try:
+            return self._element.GetRuntimeId()
+        except COMError:
+            return 0
 
     @property
     def name(self):
@@ -250,10 +263,14 @@ class UIAElementInfo(ElementInfo):
         else:
             return None
 
-    def _get_elements(self, tree_scope, cond = IUIA().true_condition, cache_enable = False):
+    def _get_elements(self, tree_scope, cond=IUIA().true_condition, cache_enable=False):
         """Find all elements according to the given tree scope and conditions"""
-        ptrs_array = self._element.FindAll(tree_scope, cond)
-        return elements_from_uia_array(ptrs_array, cache_enable)
+        try:
+            ptrs_array = self._element.FindAll(tree_scope, cond)
+            return elements_from_uia_array(ptrs_array, cache_enable)
+        except(COMError, ValueError):
+            ActionLogger().log("COM error: can't get elements")
+            return []
 
     def children(self, **kwargs):
         """Return a list of only immediate children of the element
@@ -264,6 +281,19 @@ class UIAElementInfo(ElementInfo):
         cache_enable = kwargs.pop('cache_enable', False)
         cond = IUIA().build_condition(**kwargs)
         return self._get_elements(IUIA().tree_scope["children"], cond, cache_enable)
+
+    def iter_children(self, **kwargs):
+        """Return a generator of only immediate children of the element
+
+         * **kwargs** is a criteria to reduce a list by process,
+           class_name, control_type, content_only and/or title.
+        """
+        cond = IUIA().build_condition(**kwargs)
+        tree_walker = IUIA().iuia.CreateTreeWalker(cond)
+        element = tree_walker.GetFirstChildElement(self._element)
+        while element:
+            yield UIAElementInfo(element)
+            element = tree_walker.GetNextSiblingElement(element)
 
     def descendants(self, **kwargs):
         """Return a list of all descendant children of the element
@@ -305,6 +335,19 @@ class UIAElementInfo(ElementInfo):
         """Dump window to a set of properties"""
         return dumpwindow(self.handle)
 
+    @classmethod
+    def from_point(cls, x, y):
+        return cls(IUIA().iuia.ElementFromPoint(tagPOINT(x, y)))
+
+    @classmethod
+    def top_from_point(cls, x, y):
+        current_elem = cls.from_point(x, y)
+        current_parent = current_elem.parent
+        while current_parent is not None and current_parent != cls():
+            current_elem = current_parent
+            current_parent = current_elem.parent
+        return current_elem
+
     @property
     def rich_text(self):
         """Return rich_text of the element"""
@@ -313,14 +356,9 @@ class UIAElementInfo(ElementInfo):
     def __eq__(self, other):
         """Check if 2 UIAElementInfo objects describe 1 actual element"""
         if not isinstance(other, UIAElementInfo):
-            return False;
-        # We put the most frequent attibutes at the top of comparison as
-        # quite often the element doesn't have all these attributes.
-        # For example 'handle' exists only for top-level windows.
-        return self.control_type == other.control_type and \
-               self.class_name == other.class_name and \
-               self.process_id == other.process_id and \
-               self.handle == other.handle and \
-               self.name == other.name and \
-               self.automation_id == other.automation_id and \
-               self.framework_id == other.framework_id
+            return False
+        return bool(IUIA().iuia.CompareElements(self.element, other.element))
+
+    def __ne__(self, other):
+        """Check if 2 UIAElementInfo objects describe 2 different elements"""
+        return not (self == other)

@@ -1,5 +1,5 @@
 # GUI Application automation and testing library
-# Copyright (C) 2006-2017 Mark Mc Mahon and Contributors
+# Copyright (C) 2006-2018 Mark Mc Mahon and Contributors
 # https://github.com/pywinauto/pywinauto/graphs/contributors
 # http://pywinauto.readthedocs.io/en/latest/credits.html
 # All rights reserved.
@@ -59,7 +59,7 @@ class ActionLoggerOnStadardLoggerTestCases(unittest.TestCase):
 
     def setUp(self):
         """Set some data and ensure the application is in the state we want"""
-        Timings.Fast()
+        Timings.fast()
         actionlogger.enable()
         self.app = Application().start(_notepad_exe())
         self.logger = logging.getLogger('pywinauto')
@@ -70,7 +70,7 @@ class ActionLoggerOnStadardLoggerTestCases(unittest.TestCase):
         """Close the application after tests"""
         self.logger.handlers[0].stream.close()
         self.logger.handlers[0].stream = self.out
-        self.app.kill_()
+        self.app.kill()
 
     def __lineCount(self):
         """hack to get line count from current logger stream"""
@@ -87,11 +87,11 @@ class ActionLoggerOnStadardLoggerTestCases(unittest.TestCase):
         self.assertEqual(self.__lineCount(), prev_line_count + 1)
 
         actionlogger.disable()
-        self.app.UntitledNotepad.MenuSelect('Help->About Notepad')
+        self.app.UntitledNotepad.menu_select('Help->About Notepad')
         self.assertEqual(self.__lineCount(), prev_line_count + 1)
 
         actionlogger.enable()
-        self.app.window(title='About Notepad').OK.Click()
+        self.app.window(title='About Notepad').OK.click()
         self.assertEqual(self.__lineCount(), prev_line_count + 2)
 
 
@@ -158,10 +158,10 @@ class ActionLoggerOnCustomLoggerTestCases(unittest.TestCase):
         mockLogger = self.logger_patcher.start()
 
         actionlogger.disable()
-        mockLogger.disable.assert_called()
+        self.assertTrue(mockLogger.disable.called)
 
         actionlogger.reset_level()
-        mockLogger.reset_level.assert_called()
+        self.assertTrue(mockLogger.reset_level.called)
 
     def test_logger_enable_mapped_to_reset_level(self):
         """Test if the logger enable is mapped to reset_level"""
@@ -172,7 +172,7 @@ class ActionLoggerOnCustomLoggerTestCases(unittest.TestCase):
         mockLogger = self.logger_patcher.start()
 
         actionlogger.enable()
-        mockLogger.reset_level.assert_called()
+        self.assertTrue(mockLogger.reset_level.called)
 
 
 if __name__ == "__main__":

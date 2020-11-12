@@ -1,5 +1,5 @@
 # GUI Application automation and testing library
-# Copyright (C) 2006-2017 Mark Mc Mahon and Contributors
+# Copyright (C) 2006-2018 Mark Mc Mahon and Contributors
 # https://github.com/pywinauto/pywinauto/graphs/contributors
 # http://pywinauto.readthedocs.io/en/latest/credits.html
 # All rights reserved.
@@ -51,7 +51,7 @@ from pywinauto.timings import Timings
 
 print("Setting timings to slow settings, may be necessary for")
 print("slow applications or slow machines.")
-Timings.Slow()
+Timings.slow()
 
 #application.set_timing(3, .5, 10, .5, .4, .2, .2, .1, .2, .5)
 

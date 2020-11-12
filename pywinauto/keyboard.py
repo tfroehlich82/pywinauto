@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # GUI Application automation and testing library
-# Copyright (C) 2006-2017 Mark Mc Mahon and Contributors
+# Copyright (C) 2006-2018 Mark Mc Mahon and Contributors
 # https://github.com/pywinauto/pywinauto/graphs/contributors
 # http://pywinauto.readthedocs.io/en/latest/credits.html
 # All rights reserved.
@@ -32,7 +32,9 @@
 
 """Keyboard input emulation module
 
-Automate typing keys to an active window by calling ``SendKeys`` method.
+Automate typing keys or individual key actions (viz. press and hold, release) to
+an active window by calling ``send_keys`` method.
+
 You can use any Unicode characters (on Windows) and some special keys listed
 below. The module is also available on Linux.
 
@@ -62,6 +64,8 @@ below. The module is also available on Linux.
     {VK_F19}, {VK_EXECUTE}, {VK_PLAY}, {VK_RMENU}, {VK_F13}, {VK_F12}, {LWIN},
     {VK_DOWN}, {VK_F17}, {VK_F16}, {VK_F15}, {VK_F14}
 
+    ~ is a shorter alias for {ENTER}
+
 **Modifiers:**
 
 - ``'+': {VK_SHIFT}``
@@ -70,20 +74,49 @@ below. The module is also available on Linux.
 
 Example how to use modifiers: ::
 
-    SendKeys('^a^c') # select all (Ctrl+A) and copy to clipboard (Ctrl+C)
-    SendKeys('+{INS}') # insert from clipboard (Shift+Ins)
-    SendKeys('%{F4}') # close an active window with Alt+F4
+    send_keys('^a^c') # select all (Ctrl+A) and copy to clipboard (Ctrl+C)
+    send_keys('+{INS}') # insert from clipboard (Shift+Ins)
+    send_keys('%{F4}') # close an active window with Alt+F4
 
 Repetition count can be specified for special keys. ``{ENTER 2}`` says to
 press Enter twice.
+
+Example which shows how to press and hold or release a key on the keyboard: ::
+
+    send_keys("{VK_SHIFT down}"
+              "pywinauto"
+              "{VK_SHIFT up}") # to type PYWINAUTO
+
+    send_keys("{h down}"
+              "{e down}"
+              "{h up}"
+              "{e up}"
+              "llo") # to type hello
+
+Use curly brackers to escape modifiers and type reserved symbols as single keys: ::
+
+    send_keys('{^}a{^}c{%}') # type string "^a^c%" (Ctrl will not be pressed)
+    send_keys('{{}ENTER{}}') # type string "{ENTER}" without pressing Enter key
+
+For Windows only, pywinauto defaults to sending a virtual key packet
+(VK_PACKET) for textual input.  For applications that do not handle VK_PACKET
+appropriately, the ``vk_packet`` option may be set to ``False``.  In this case
+pywinauto will attempt to send the virtual key code of the requested key.  This
+option only affects the behavior of keys matching [-=[]\;',./a-zA-Z0-9 ].  Note
+that upper and lower case are included for a-z.  Both reference the same
+virtual key for convenience.
+
 """
 from __future__ import unicode_literals
 
 import sys
+import string
+
+from . import deprecated
 
 if sys.platform != 'win32':
     from .linux.keyboard import KeySequenceError, KeyAction, PauseAction
-    from .linux.keyboard import handle_code, parse_keys, SendKeys
+    from .linux.keyboard import handle_code, parse_keys, send_keys
 else:
     import time
     import ctypes
@@ -91,193 +124,182 @@ else:
     import six
 
     from . import win32structures
+    from . import win32functions
 
-    __all__ = ['KeySequenceError', 'SendKeys']
+    __all__ = ['KeySequenceError', 'send_keys']
 
-    #pylint: disable-msg=R0903
+    # pylint: disable-msg=R0903
 
     DEBUG = 0
 
-    GetMessageExtraInfo = ctypes.windll.user32.GetMessageExtraInfo
-    MapVirtualKey = ctypes.windll.user32.MapVirtualKeyW
-    SendInput = ctypes.windll.user32.SendInput
-    UINT = ctypes.c_uint
-    SendInput.restype = UINT
-    SendInput.argtypes = [UINT, ctypes.c_void_p, ctypes.c_int]
-
-    VkKeyScan = ctypes.windll.user32.VkKeyScanW
-    VkKeyScan.restype = ctypes.c_short
-    VkKeyScan.argtypes = [ctypes.c_wchar]
-
-
     INPUT_KEYBOARD = 1
     KEYEVENTF_EXTENDEDKEY = 1
-    KEYEVENTF_KEYUP       = 2
-    KEYEVENTF_UNICODE     = 4
-    KEYEVENTF_SCANCODE    = 8
-    VK_SHIFT        = 16
-    VK_CONTROL      = 17
-    VK_MENU         = 18
+    KEYEVENTF_KEYUP = 2
+    KEYEVENTF_UNICODE = 4
+    KEYEVENTF_SCANCODE = 8
+    VK_SHIFT = 16
+    VK_CONTROL = 17
+    VK_MENU = 18
 
     # 'codes' recognized as {CODE( repeat)?}
     CODES = {
-        'BACK':     8,
-        'BACKSPACE':8,
-        'BKSP':     8,
-        'BREAK':    3,
-        'BS':       8,
-        'CAP':      20,
+        'BACK': 8,
+        'BACKSPACE': 8,
+        'BKSP': 8,
+        'BREAK': 3,
+        'BS': 8,
+        'CAP': 20,
         'CAPSLOCK': 20,
-        'DEL':      46,
-        'DELETE':   46,
-        'DOWN':     40,
-        'END':      35,
-        'ENTER':    13,
-        'ESC':      27,
-        'F1':       112,
-        'F2':       113,
-        'F3':       114,
-        'F4':       115,
-        'F5':       116,
-        'F6':       117,
-        'F7':       118,
-        'F8':       119,
-        'F9':       120,
-        'F10':      121,
-        'F11':      122,
-        'F12':      123,
-        'F13':      124,
-        'F14':      125,
-        'F15':      126,
-        'F16':      127,
-        'F17':      128,
-        'F18':      129,
-        'F19':      130,
-        'F20':      131,
-        'F21':      132,
-        'F22':      133,
-        'F23':      134,
-        'F24':      135,
-        'HELP':     47,
-        'HOME':     36,
-        'INS':      45,
-        'INSERT':   45,
-        'LEFT':     37,
-        'LWIN':     91,
-        'NUMLOCK':  144,
-        'PGDN':     34,
-        'PGUP':     33,
-        'PRTSC':    44,
-        'RIGHT':    39,
-        'RMENU':    165,
-        'RWIN':     92,
-        'SCROLLLOCK':145,
-        'SPACE':     32,
-        'TAB':       9,
-        'UP':        38,
+        'DEL': 46,
+        'DELETE': 46,
+        'DOWN': 40,
+        'END': 35,
+        'ENTER': 13,
+        'ESC': 27,
+        'F1': 112,
+        'F2': 113,
+        'F3': 114,
+        'F4': 115,
+        'F5': 116,
+        'F6': 117,
+        'F7': 118,
+        'F8': 119,
+        'F9': 120,
+        'F10': 121,
+        'F11': 122,
+        'F12': 123,
+        'F13': 124,
+        'F14': 125,
+        'F15': 126,
+        'F16': 127,
+        'F17': 128,
+        'F18': 129,
+        'F19': 130,
+        'F20': 131,
+        'F21': 132,
+        'F22': 133,
+        'F23': 134,
+        'F24': 135,
+        'HELP': 47,
+        'HOME': 36,
+        'INS': 45,
+        'INSERT': 45,
+        'LEFT': 37,
+        'LWIN': 91,
+        'NUMLOCK': 144,
+        'PGDN': 34,
+        'PGUP': 33,
+        'PRTSC': 44,
+        'RIGHT': 39,
+        'RMENU': 165,
+        'RWIN': 92,
+        'SCROLLLOCK': 145,
+        'SPACE': 32,
+        'TAB': 9,
+        'UP': 38,
 
         'VK_ACCEPT': 30,
-        'VK_ADD':    107,
-        'VK_APPS':    93,
-        'VK_ATTN':    246,
-        'VK_BACK':    8,
-        'VK_CANCEL':  3,
+        'VK_ADD': 107,
+        'VK_APPS': 93,
+        'VK_ATTN': 246,
+        'VK_BACK': 8,
+        'VK_CANCEL': 3,
         'VK_CAPITAL': 20,
-        'VK_CLEAR':   12,
+        'VK_CLEAR': 12,
         'VK_CONTROL': 17,
         'VK_CONVERT': 28,
-        'VK_CRSEL':   247,
+        'VK_CRSEL': 247,
         'VK_DECIMAL': 110,
-        'VK_DELETE':  46,
-        'VK_DIVIDE':  111,
-        'VK_DOWN':    40,
-        'VK_END':     35,
-        'VK_EREOF':   249,
-        'VK_ESCAPE':  27,
+        'VK_DELETE': 46,
+        'VK_DIVIDE': 111,
+        'VK_DOWN': 40,
+        'VK_END': 35,
+        'VK_EREOF': 249,
+        'VK_ESCAPE': 27,
         'VK_EXECUTE': 43,
-        'VK_EXSEL':   248,
-        'VK_F1':      112,
-        'VK_F2':      113,
-        'VK_F3':      114,
-        'VK_F4':      115,
-        'VK_F5':      116,
-        'VK_F6':      117,
-        'VK_F7':      118,
-        'VK_F8':      119,
-        'VK_F9':      120,
-        'VK_F10':     121,
-        'VK_F11':     122,
-        'VK_F12':     123,
-        'VK_F13':     124,
-        'VK_F14':     125,
-        'VK_F15':     126,
-        'VK_F16':     127,
-        'VK_F17':     128,
-        'VK_F18':     129,
-        'VK_F19':     130,
-        'VK_F20':     131,
-        'VK_F21':     132,
-        'VK_F22':     133,
-        'VK_F23':     134,
-        'VK_F24':     135,
-        'VK_FINAL':   24,
-        'VK_HANGEUL':  21,
-        'VK_HANGUL':   21,
-        'VK_HANJA':    25,
-        'VK_HELP':     47,
-        'VK_HOME':     36,
-        'VK_INSERT':   45,
-        'VK_JUNJA':    23,
-        'VK_KANA':     21,
-        'VK_KANJI':    25,
-        'VK_LBUTTON':   1,
-        'VK_LCONTROL':162,
-        'VK_LEFT':     37,
-        'VK_LMENU':   164,
-        'VK_LSHIFT':  160,
-        'VK_LWIN':     91,
-        'VK_MBUTTON':    4,
-        'VK_MENU':        18,
-        'VK_MODECHANGE':  31,
-        'VK_MULTIPLY':   106,
-        'VK_NEXT':        34,
-        'VK_NONAME':     252,
-        'VK_NONCONVERT':  29,
-        'VK_NUMLOCK':    144,
-        'VK_NUMPAD0':     96,
-        'VK_NUMPAD1':     97,
-        'VK_NUMPAD2':     98,
-        'VK_NUMPAD3':     99,
-        'VK_NUMPAD4':    100,
-        'VK_NUMPAD5':    101,
-        'VK_NUMPAD6':    102,
-        'VK_NUMPAD7':    103,
-        'VK_NUMPAD8':    104,
-        'VK_NUMPAD9':    105,
-        'VK_OEM_CLEAR':  254,
-        'VK_PA1':        253,
-        'VK_PAUSE':       19,
-        'VK_PLAY':       250,
-        'VK_PRINT':       42,
-        'VK_PRIOR':       33,
+        'VK_EXSEL': 248,
+        'VK_F1': 112,
+        'VK_F2': 113,
+        'VK_F3': 114,
+        'VK_F4': 115,
+        'VK_F5': 116,
+        'VK_F6': 117,
+        'VK_F7': 118,
+        'VK_F8': 119,
+        'VK_F9': 120,
+        'VK_F10': 121,
+        'VK_F11': 122,
+        'VK_F12': 123,
+        'VK_F13': 124,
+        'VK_F14': 125,
+        'VK_F15': 126,
+        'VK_F16': 127,
+        'VK_F17': 128,
+        'VK_F18': 129,
+        'VK_F19': 130,
+        'VK_F20': 131,
+        'VK_F21': 132,
+        'VK_F22': 133,
+        'VK_F23': 134,
+        'VK_F24': 135,
+        'VK_FINAL': 24,
+        'VK_HANGEUL': 21,
+        'VK_HANGUL': 21,
+        'VK_HANJA': 25,
+        'VK_HELP': 47,
+        'VK_HOME': 36,
+        'VK_INSERT': 45,
+        'VK_JUNJA': 23,
+        'VK_KANA': 21,
+        'VK_KANJI': 25,
+        'VK_LBUTTON': 1,
+        'VK_LCONTROL': 162,
+        'VK_LEFT': 37,
+        'VK_LMENU': 164,
+        'VK_LSHIFT': 160,
+        'VK_LWIN': 91,
+        'VK_MBUTTON': 4,
+        'VK_MENU': 18,
+        'VK_MODECHANGE': 31,
+        'VK_MULTIPLY': 106,
+        'VK_NEXT': 34,
+        'VK_NONAME': 252,
+        'VK_NONCONVERT': 29,
+        'VK_NUMLOCK': 144,
+        'VK_NUMPAD0': 96,
+        'VK_NUMPAD1': 97,
+        'VK_NUMPAD2': 98,
+        'VK_NUMPAD3': 99,
+        'VK_NUMPAD4': 100,
+        'VK_NUMPAD5': 101,
+        'VK_NUMPAD6': 102,
+        'VK_NUMPAD7': 103,
+        'VK_NUMPAD8': 104,
+        'VK_NUMPAD9': 105,
+        'VK_OEM_CLEAR': 254,
+        'VK_PA1': 253,
+        'VK_PAUSE': 19,
+        'VK_PLAY': 250,
+        'VK_PRINT': 42,
+        'VK_PRIOR': 33,
         'VK_PROCESSKEY': 229,
-        'VK_RBUTTON':      2,
-        'VK_RCONTROL':   163,
-        'VK_RETURN':      13,
-        'VK_RIGHT':       39,
-        'VK_RMENU':      165,
-        'VK_RSHIFT':     161,
-        'VK_RWIN':        92,
-        'VK_SCROLL':     145,
-        'VK_SELECT':      41,
-        'VK_SEPARATOR':  108,
-        'VK_SHIFT':       16,
-        'VK_SNAPSHOT':    44,
-        'VK_SPACE':       32,
-        'VK_SUBTRACT':   109,
-        'VK_TAB':          9,
-        'VK_UP':          38,
-        'ZOOM':          251,
+        'VK_RBUTTON': 2,
+        'VK_RCONTROL': 163,
+        'VK_RETURN': 13,
+        'VK_RIGHT': 39,
+        'VK_RMENU': 165,
+        'VK_RSHIFT': 161,
+        'VK_RWIN': 92,
+        'VK_SCROLL': 145,
+        'VK_SELECT': 41,
+        'VK_SEPARATOR': 108,
+        'VK_SHIFT': 16,
+        'VK_SNAPSHOT': 44,
+        'VK_SPACE': 32,
+        'VK_SUBTRACT': 109,
+        'VK_TAB': 9,
+        'VK_UP': 38,
+        'ZOOM': 251,
     }
     # reverse the CODES dict to make it easy to look up a particular code name
     CODE_NAMES = dict((entry[1], entry[0]) for entry in CODES.items())
@@ -288,6 +310,29 @@ else:
         '^': VK_CONTROL,
         '%': VK_MENU,
     }
+
+    # Virtual keys that map to an ASCII character
+    # See https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+    ascii_vk = {
+        ' ': 0x20,
+        '=': 0xbb,
+        ',': 0xbc,
+        '-': 0xbd,
+        '.': 0xbe,
+        # According to the above reference, the following characters vary per region.
+        # This mapping applies to US keyboards
+        ';': 0xba,
+        '/': 0xbf,
+        '`': 0xc0,
+        '[': 0xdb,
+        '\\': 0xdc,
+        ']': 0xdd,
+        '\'': 0xde,
+    }
+    # [0-9A-Z] map exactly to their ASCII counterparts
+    ascii_vk.update(dict((c, ord(c)) for c in string.ascii_uppercase + string.digits))
+    # map [a-z] to their uppercase ASCII counterparts
+    ascii_vk.update(dict((c, ord(c.upper())) for c in string.ascii_lowercase))
 
 
     class KeySequenceError(Exception):
@@ -306,7 +351,7 @@ else:
         action (press or release or both) of a particular key.
         """
 
-        def __init__(self, key, down = True, up = True):
+        def __init__(self, key, down=True, up=True):
             self.key = key
             if isinstance(self.key, six.string_types):
                 self.key = six.text_type(key)
@@ -344,10 +389,10 @@ else:
                 inp.ki.wVk = vk
                 inp.ki.wScan = scan
                 inp.ki.dwFlags |= flags
-                
+
                 # it seems to return 0 every time but it's required by MSDN specification
                 # so call it just in case
-                inp.ki.dwExtraInfo = GetMessageExtraInfo()
+                inp.ki.dwExtraInfo = win32functions.GetMessageExtraInfo()
 
             # if we are releasing - then let it up
             if self.up:
@@ -360,7 +405,7 @@ else:
             inputs = self.GetInput()
 
             # SendInput() supports all Unicode symbols
-            num_inserted_events = SendInput(len(inputs), ctypes.byref(inputs),
+            num_inserted_events = win32functions.SendInput(len(inputs), ctypes.byref(inputs),
                                             ctypes.sizeof(win32structures.INPUT))
             if num_inserted_events != len(inputs):
                 raise RuntimeError('SendInput() inserted only ' + str(num_inserted_events) +
@@ -368,7 +413,7 @@ else:
 
         def _get_down_up_string(self):
             """Return a string that will show whether the string is up or down
-            
+
             return 'down' if the key is a press only
             return 'up' if the key is up only
             return '' if the key is up & down (as default)
@@ -380,7 +425,7 @@ else:
                 elif self.up:
                     down_up = "up"
             return down_up
-        
+
         def key_description(self):
             """Return a description of the key"""
             vk, scan, flags = self._get_key_info()
@@ -392,7 +437,7 @@ else:
                     desc = "VK {}".format(vk)
             else:
                 desc = "{}".format(self.key)
-            
+
             return desc
 
         def __str__(self):
@@ -403,6 +448,7 @@ else:
                 parts.append(up_down)
 
             return "<{}>".format(" ".join(parts))
+
         __repr__ = __str__
 
 
@@ -422,10 +468,10 @@ else:
             else:
                 flags = 0
             # This works for %{F4} - ALT + F4
-            #return self.key, 0, 0
+            # return self.key, 0, 0
 
             # this works for Tic Tac Toe i.e. +{RIGHT} SHIFT + RIGHT
-            return self.key, MapVirtualKey(self.key, 0), flags
+            return self.key, win32functions.MapVirtualKeyW(self.key, 0), flags
 
         def run(self):
             """Execute the action"""
@@ -446,9 +492,9 @@ else:
 
             The vk and scan code are generated differently.
             """
-            vkey_scan = LoByte(VkKeyScan(self.key))
+            vkey_scan = LoByte(win32functions.VkKeyScanW(self.key))
 
-            return (vkey_scan, MapVirtualKey(vkey_scan, 0), 0)
+            return (vkey_scan, win32functions.MapVirtualKeyW(vkey_scan, 0), 0)
 
         def key_description(self):
             """Return a description of the key"""
@@ -473,11 +519,12 @@ else:
             time.sleep(self.how_long)
 
         def __str__(self):
-            return "<PAUSE %1.2f>"% (self.how_long)
+            return "<PAUSE %1.2f>" % (self.how_long)
+
         __repr__ = __str__
 
 
-    def handle_code(code):
+    def handle_code(code, vk_packet):
         """Handle a key or sequence of keys in braces"""
         code_keys = []
         # it is a known code (e.g. {DOWN}, {ENTER}, etc)
@@ -486,7 +533,10 @@ else:
 
         # it is an escaped modifier e.g. {%}, {^}, {+}
         elif len(code) == 1:
-            code_keys.append(KeyAction(code))
+            if not vk_packet and code in ascii_vk:
+                code_keys.append(VirtualKeyAction(ascii_vk[code]))
+            else:
+                code_keys.append(KeyAction(code))
 
         # it is a repetition or a pause  {DOWN 5}, {PAUSE 1.3}
         elif ' ' in code:
@@ -512,7 +562,7 @@ else:
                         [VirtualKeyAction(CODES[to_repeat])] * count)
                 # otherwise parse the keys and we get back a KeyAction
                 else:
-                    to_repeat = parse_keys(to_repeat)
+                    to_repeat = parse_keys(to_repeat, vk_packet=vk_packet)
                     if isinstance(to_repeat, list):
                         keys = to_repeat * count
                     else:
@@ -523,16 +573,18 @@ else:
 
         return code_keys
 
-
     def parse_keys(string,
-                   with_spaces = False,
-                   with_tabs = False,
-                   with_newlines = False,
-                   modifiers = None):
+                   with_spaces=False,
+                   with_tabs=False,
+                   with_newlines=False,
+                   modifiers=None,
+                   vk_packet=True):
         """Return the parsed keys"""
         keys = []
         if not modifiers:
             modifiers = []
+
+        should_escape_next_keys = False
         index = 0
         while index < len(string):
 
@@ -544,7 +596,7 @@ else:
                 # remember that we are currently modified
                 modifiers.append(modifier)
                 # hold down the modifier key
-                keys.append(VirtualKeyAction(modifier, up = False))
+                keys.append(VirtualKeyAction(modifier, up=False))
                 if DEBUG:
                     print("MODS+", modifiers)
                 continue
@@ -555,8 +607,10 @@ else:
                 end_pos = string.find(")", index)
                 if end_pos == -1:
                     raise KeySequenceError('`)` not found')
-                keys.extend(
-                    parse_keys(string[index:end_pos], modifiers = modifiers))
+                keys.extend(parse_keys(
+                        string[index:end_pos],
+                        modifiers=modifiers,
+                        vk_packet=vk_packet))
                 index = end_pos + 1
 
             # Escape or named key
@@ -568,7 +622,21 @@ else:
 
                 code = string[index:end_pos]
                 index = end_pos + 1
-                keys.extend(handle_code(code))
+                key_events = [' up', ' down']
+                current_key_event = None
+                if any(key_event in code.lower() for key_event in key_events):
+                    code, current_key_event = code.split(' ')
+                    should_escape_next_keys = True
+                current_keys = handle_code(code, vk_packet)
+                if current_key_event is not None:
+                    if isinstance(current_keys[0].key, six.string_types):
+                        current_keys[0] = EscapedKeyAction(current_keys[0].key)
+
+                    if current_key_event.strip() == 'up':
+                        current_keys[0].down = False
+                    else:
+                        current_keys[0].up = False
+                keys.extend(current_keys)
 
             # unmatched ")"
             elif c == ')':
@@ -592,11 +660,16 @@ else:
 
                 # safest are the virtual keys - so if our key is a virtual key
                 # use a VirtualKeyAction
-                #if ord(c) in CODE_NAMES:
+                # if ord(c) in CODE_NAMES:
                 #    keys.append(VirtualKeyAction(ord(c)))
 
-                elif modifiers:
+                elif modifiers or should_escape_next_keys:
                     keys.append(EscapedKeyAction(c))
+
+                # if user disables the vk_packet option, always try to send a
+                # virtual key of the actual keystroke
+                elif not vk_packet and c in ascii_vk:
+                    keys.append(VirtualKeyAction(ascii_vk[c]))
 
                 else:
                     keys.append(KeyAction(c))
@@ -605,31 +678,39 @@ else:
             while modifiers:
                 if DEBUG:
                     print("MODS-", modifiers)
-                keys.append(VirtualKeyAction(modifiers.pop(), down = False))
+                keys.append(VirtualKeyAction(modifiers.pop(), down=False))
 
         # just in case there were any modifiers left pressed - release them
         while modifiers:
-            keys.append(VirtualKeyAction(modifiers.pop(), down = False))
+            keys.append(VirtualKeyAction(modifiers.pop(), down=False))
 
         return keys
+
 
     def LoByte(val):
         """Return the low byte of the value"""
         return val & 0xff
 
+
     def HiByte(val):
         """Return the high byte of the value"""
         return (val & 0xff00) >> 8
 
-    def SendKeys(keys,
-                 pause=0.05,
-                 with_spaces=False,
-                 with_tabs=False,
-                 with_newlines=False,
-                 turn_off_numlock=True):
+
+    def send_keys(keys,
+                  pause=0.05,
+                  with_spaces=False,
+                  with_tabs=False,
+                  with_newlines=False,
+                  turn_off_numlock=True,
+                  vk_packet=True):
         """Parse the keys and type them"""
-        keys = parse_keys(keys, with_spaces, with_tabs, with_newlines)
+        keys = parse_keys(
+                keys, with_spaces, with_tabs, with_newlines,
+                vk_packet=vk_packet)
 
         for k in keys:
             k.run()
             time.sleep(pause)
+
+    SendKeys = deprecated(send_keys)

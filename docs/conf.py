@@ -28,9 +28,12 @@ if sys.platform.startswith('linux'):
             'win32con',
             'win32process',
             'win32gui',
+            'win32gui_struct',
+            'win32ui',
             'win32event',
             'win32com',
             'win32com.client',
+            "win32clipboard",
             'multiprocessing',
             '_winreg',
             'ctypes.wintypes',
@@ -46,7 +49,6 @@ if sys.platform.startswith('linux'):
             'pywinauto.win32defines',
             "pywinauto.win32functions",
             "win32functions",
-            "win32clipboard",
             'win32structures',
             'comtypes',
             'comtypes.client',
@@ -106,7 +108,7 @@ master_doc = 'contents'
 
 # General information about the project.
 project = u'pywinauto'
-copyright = u'2017, Mark Mc Mahon and Contributors'
+copyright = u'2018, Mark Mc Mahon and Contributors'
 author = u'Mark Mc Mahon and Contributors'
 
 # The version info for the project you're documenting, acts as replacement for
