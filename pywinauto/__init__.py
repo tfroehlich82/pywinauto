@@ -32,7 +32,7 @@
 
 """Python package for automating GUI manipulation on Windows"""
 
-__version__ = "0.6.8"
+__version__ = "0.6.9"
 
 import sys  # noqa: E402
 import warnings  # noqa: E402
@@ -59,6 +59,9 @@ if sys.platform == 'win32':
     import win32api  # noqa: E402
     import pythoncom  # noqa: E402
 
+    from .windows import win32defines
+    from . import clipboard
+
 
     def _get_com_threading_mode(module_sys):
         """Set up COM threading model
@@ -84,80 +87,87 @@ if sys.platform == 'win32':
 
 
     sys.coinit_flags = _get_com_threading_mode(sys)
-    from .sysinfo import UIA_support
-
-    from . import findwindows
-
-    WindowAmbiguousError = findwindows.WindowAmbiguousError
-    WindowNotFoundError = findwindows.WindowNotFoundError
-    ElementNotFoundError = findwindows.ElementNotFoundError
-    ElementAmbiguousError = findwindows.ElementAmbiguousError
-
-    from . import findbestmatch
-    from . import backend as backends
-
-    MatchError = findbestmatch.MatchError
-
-    from .application import Application, WindowSpecification
 
 
-    class Desktop(object):
-        """Simple class to call something like ``Desktop().WindowName.ControlName.method()``"""
+#=========================================================================
+class WindowNotFoundError(Exception):
 
-        def __init__(self, backend=None, allow_magic_lookup=True):
-            """Create desktop element description"""
-            if not backend:
-                backend = backends.registry.name
-            if backend not in backends.registry.backends:
-                raise ValueError('Backend "{0}" is not registered!'.format(backend))
-            self.backend = backends.registry.backends[backend]
-            self.allow_magic_lookup = allow_magic_lookup
+    """No window could be found"""
+    pass
 
-        def window(self, **kwargs):
-            """Create WindowSpecification object for top-level window"""
-            if 'top_level_only' not in kwargs:
-                kwargs['top_level_only'] = True
-            if 'backend' in kwargs:
-                raise ValueError('Using another backend than set in Desktop constructor is not allowed!')
-            kwargs['backend'] = self.backend.name
-            return WindowSpecification(kwargs, allow_magic_lookup=self.allow_magic_lookup)
+from . import findwindows
 
-        def windows(self, **kwargs):
-            """Return a list of wrapped top level windows"""
-            if 'backend' in kwargs:
-                raise ValueError('Using another backend than set in Desktop constructor is not allowed!!')
+WindowAmbiguousError = findwindows.WindowAmbiguousError
+ElementNotFoundError = findwindows.ElementNotFoundError
+ElementAmbiguousError = findwindows.ElementAmbiguousError
 
-            if 'visible_only' not in kwargs:
-                kwargs['visible_only'] = False
 
-            if 'enabled_only' not in kwargs:
-                kwargs['enabled_only'] = False
+from . import findbestmatch
+from . import backend as backends
 
-            kwargs['backend'] = self.backend.name
+MatchError = findbestmatch.MatchError
 
-            windows = findwindows.find_elements(**kwargs)
-            return [self.backend.generic_wrapper_class(win) for win in windows]
+from pywinauto.application import Application, WindowSpecification
 
-        def __getitem__(self, key):
-            """Allow describe top-level window as Desktop()['Window Caption']"""
-            return self.window(best_match=key)
 
-        def __getattribute__(self, attr_name):
-            """Attribute access for this class"""
-            allow_magic_lookup = object.__getattribute__(self, "allow_magic_lookup")  # Beware of recursions here!
-            try:
-                return object.__getattribute__(self, attr_name)
-            except AttributeError:
-                if not allow_magic_lookup:
-                    raise
-                return self[attr_name]  # delegate it to __get_item__
+class Desktop(object):
+    """Simple class to call something like ``Desktop().WindowName.ControlName.method()``"""
 
-        def from_point(self, x, y):
-            """Get wrapper object for element at specified screen coordinates (x, y)"""
-            element_info = self.backend.element_info_class.from_point(x, y)
-            return self.backend.generic_wrapper_class(element_info)
+    def __init__(self, backend=None, allow_magic_lookup=True):
+        """Create desktop element description"""
+        if not backend:
+            backend = backends.registry.name
+        if backend not in backends.registry.backends:
+            raise ValueError('Backend "{0}" is not registered!'.format(backend))
+        self.backend = backends.registry.backends[backend]
+        self.allow_magic_lookup = allow_magic_lookup
 
-        def top_from_point(self, x, y):
-            """Get wrapper object for top level element at specified screen coordinates (x, y)"""
-            top_element_info = self.backend.element_info_class.top_from_point(x, y)
-            return self.backend.generic_wrapper_class(top_element_info)
+    def window(self, **kwargs):
+        """Create WindowSpecification object for top-level window"""
+        if 'top_level_only' not in kwargs:
+            kwargs['top_level_only'] = True
+        if 'backend' in kwargs:
+            raise ValueError('Using another backend than set in Desktop constructor is not allowed!')
+        kwargs['backend'] = self.backend.name
+        return WindowSpecification(kwargs, allow_magic_lookup=self.allow_magic_lookup)
+
+    def windows(self, **kwargs):
+        """Return a list of wrapped top level windows"""
+        if 'top_level_only' not in kwargs:
+            kwargs['top_level_only'] = True
+        if 'backend' in kwargs:
+            raise ValueError('Using another backend than set in Desktop constructor is not allowed!!')
+
+        kwargs['backend'] = self.backend.name
+
+        windows = findwindows.find_elements(**kwargs)
+        return [self.backend.generic_wrapper_class(win) for win in windows]
+
+    def __getitem__(self, key):
+        """Allow describe top-level window as Desktop()['Window Caption']"""
+        return self.window(best_match=key)
+
+    def __getattribute__(self, attr_name):
+        """Attribute access for this class"""
+        allow_magic_lookup = object.__getattribute__(self, "allow_magic_lookup")  # Beware of recursions here!
+        try:
+            return object.__getattribute__(self, attr_name)
+        except AttributeError:
+            if not allow_magic_lookup:
+                raise
+            return self[attr_name]  # delegate it to __get_item__
+
+    def from_point(self, x, y):
+        """Get wrapper object for element at specified screen coordinates (x, y)"""
+        element_info = self.backend.element_info_class.from_point(x, y)
+        return self.backend.generic_wrapper_class(element_info)
+
+    def top_from_point(self, x, y):
+        """Get wrapper object for top level element at specified screen coordinates (x, y)"""
+        top_element_info = self.backend.element_info_class.top_from_point(x, y)
+        return self.backend.generic_wrapper_class(top_element_info)
+
+    def get_active(self):
+        """Get wrapper object for active element"""
+        element_info = self.backend.element_info_class.get_active()
+        return self.backend.generic_wrapper_class(element_info)

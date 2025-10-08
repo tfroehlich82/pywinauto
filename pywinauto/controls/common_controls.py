@@ -51,13 +51,10 @@ import ctypes
 from ctypes import wintypes
 import warnings
 import locale
-import six
 
-from .. import win32functions
-from .. import win32defines
-from .. import win32structures
+from pywinauto.windows import win32defines, win32functions, win32structures
 from .. import findbestmatch
-from ..remote_memory_block import RemoteMemoryBlock
+from ..windows.remote_memory_block import RemoteMemoryBlock
 from . import hwndwrapper
 
 from ..timings import Timings
@@ -95,7 +92,7 @@ class _listview_item(object):
         list of item titles.
         """
         index = item
-        if isinstance(item, six.string_types):
+        if isinstance(item, str):
             index = int((self.listview_ctrl.texts().index(item) - 1) / self.listview_ctrl.column_count())
 
         return index
@@ -1328,7 +1325,7 @@ class _treeview_element(object):
         """
         #print child_spec
 
-        if isinstance(child_spec, six.string_types):
+        if isinstance(child_spec, str):
 
             texts = [c.text() for c in self.children()]
             if exact:
@@ -1408,9 +1405,9 @@ class _treeview_element(object):
             item = win32structures.TVITEMW32()
 
         item.mask = win32defines.TVIF_TEXT | \
-            win32defines.TVIF_HANDLE | \
-            win32defines.TVIF_CHILDREN | \
-            win32defines.TVIF_STATE
+                    win32defines.TVIF_HANDLE | \
+                    win32defines.TVIF_CHILDREN | \
+                    win32defines.TVIF_STATE
 
         # set the address for the text
         item.pszText = remote_mem.Address() + ctypes.sizeof(item) + 16
@@ -1547,7 +1544,7 @@ class TreeViewWrapper(hwndwrapper.HwndWrapper):
             return None
 
         # Ensure the path is absolute
-        if isinstance(path, six.string_types):
+        if isinstance(path, str):
             if not path.startswith("\\"):
                 raise RuntimeError(
                     "Only absolute paths allowed - "
@@ -1601,7 +1598,7 @@ class TreeViewWrapper(hwndwrapper.HwndWrapper):
             try:
                 current_elem = current_elem.get_child(child_spec, exact)
             except IndexError:
-                if isinstance(child_spec, six.string_types):
+                if isinstance(child_spec, str):
                     raise IndexError("Item '%s' does not have a child '%s'" %
                                      (current_elem.text(), child_spec))
                 else:
@@ -1797,8 +1794,8 @@ class HeaderWrapper(hwndwrapper.HwndWrapper):
 
         item = win32structures.HDITEMW()
         item.mask = win32defines.HDI_FORMAT | \
-            win32defines.HDI_WIDTH | \
-            win32defines.HDI_TEXT  # | HDI_ORDER
+                    win32defines.HDI_WIDTH | \
+                    win32defines.HDI_TEXT  # | HDI_ORDER
         item.cchTextMax = 2000
 
         # set up the pointer to the text
@@ -2214,7 +2211,7 @@ class TabControlWrapper(hwndwrapper.HwndWrapper):
 
         # if it's a string then find the index of
         # the tab with that text
-        if isinstance(tab, six.string_types):
+        if isinstance(tab, str):
             # find the string in the tab control
             best_text = findbestmatch.find_best_match(
                 tab, self.texts(), self.texts())
@@ -2457,7 +2454,7 @@ class ToolbarWrapper(hwndwrapper.HwndWrapper):
     #----------------------------------------------------------------
     def button(self, button_identifier, exact=True, by_tooltip=False):
         """Return the button at index button_index"""
-        if isinstance(button_identifier, six.string_types):
+        if isinstance(button_identifier, str):
             texts = self.texts()[1:]
             self.actions.log('Toolbar buttons: ' + str(texts))
             # one of these will be returned for the matching text
@@ -2761,11 +2758,11 @@ class ToolbarWrapper(hwndwrapper.HwndWrapper):
         current_toolbar = self
         current_toolbar.set_focus() # to make sure it can be clicked immediately
         for i, index in enumerate(indices):
-            windows_before = app.windows(visible_only=True)
+            windows_before = app.windows(visible=True)
             current_toolbar.button(index).click_input()
             if i < len(indices) - 1:
-                wait_until(5, 0.1, lambda: len(app.windows(visible_only=True)) > len(windows_before))
-                windows_after = app.windows(visible_only=True)
+                wait_until(5, 0.1, lambda: len(app.windows(visible=True)) > len(windows_before))
+                windows_after = app.windows(visible=True)
                 new_window = set(windows_after) - set(windows_before)
                 current_toolbar = list(new_window)[0].children()[0]
         self.actions.logSectionEnd()
@@ -3394,7 +3391,7 @@ class CalendarWrapper(hwndwrapper.HwndWrapper):
         system_date = win32structures.SYSTEMTIME()
         remote_mem.Write(system_date)
 
-        res = self.send_message(win32defines.MCM_GETCURSEL , 0, remote_mem)
+        res = self.send_message(win32defines.MCM_GETCURSEL, 0, remote_mem)
         remote_mem.Read(system_date)
         del remote_mem
 

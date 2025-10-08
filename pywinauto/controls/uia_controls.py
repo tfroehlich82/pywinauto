@@ -29,24 +29,88 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""Wrap various UIA windows controls"""
+"""Wrap various UIA windows controls. To be used with 'uia' backend."""
 import locale
+import time
 import comtypes
-import six
 
-from .. import uia_element_info
-from .. import findbestmatch
-from .. import timings
+from pywinauto import findbestmatch
+from pywinauto import timings
 
-from .. import uia_defines as uia_defs
-from . import uiawrapper
-from . import win32_controls
-from . import common_controls
-from ..uia_element_info import UIAElementInfo
-from ..uia_defines import IUIA
-from ..uia_defines import NoPatternInterfaceError
-from ..uia_defines import toggle_state_on
-from ..uia_defines import get_elem_interface
+from pywinauto.controls import uiawrapper
+from pywinauto.controls import win32_controls
+from pywinauto.controls import common_controls
+
+from pywinauto.windows import uia_element_info
+from pywinauto.windows import uia_defines as uia_defs
+
+from pywinauto.windows.uia_defines import IUIA
+from pywinauto.windows.uia_defines import NoPatternInterfaceError
+from pywinauto.windows.uia_defines import toggle_state_on
+from pywinauto.windows.uia_defines import get_elem_interface
+
+
+# ====================================================================
+class WindowWrapper(uiawrapper.UIAWrapper):
+
+    """Wrap a UIA-compatible Window control"""
+
+    _control_types = ['Window']
+
+    # -----------------------------------------------------------
+    def __init__(self, elem):
+        """Initialize the control"""
+        super(WindowWrapper, self).__init__(elem)
+
+    # -----------------------------------------------------------
+    def move_window(self, x=None, y=None, width=None, height=None):
+        """Move the window to the new coordinates
+
+        * **x** Specifies the new left position of the window.
+                Defaults to the current left position of the window.
+        * **y** Specifies the new top position of the window.
+                Defaults to the current top position of the window.
+        * **width** Specifies the new width of the window.
+                Defaults to the current width of the window.
+        * **height** Specifies the new height of the window.
+                Defaults to the current height of the window.
+        """
+        cur_rect = self.rectangle()
+
+        # if no X is specified - so use current coordinate
+        if x is None:
+            x = cur_rect.left
+        else:
+            try:
+                y = x.top
+                width = x.width()
+                height = x.height()
+                x = x.left
+            except AttributeError:
+                pass
+
+        # if no Y is specified - so use current coordinate
+        if y is None:
+            y = cur_rect.top
+
+        # if no width is specified - so use current width
+        if width is None:
+            width = cur_rect.width()
+
+        # if no height is specified - so use current height
+        if height is None:
+            height = cur_rect.height()
+
+        # ask for the window to be moved
+        self.iface_transform.Move(x, y)
+        self.iface_transform.Resize(width, height)
+
+        time.sleep(timings.Timings.after_movewindow_wait)
+
+    # -----------------------------------------------------------
+    def is_dialog(self):
+        """Window is always a dialog so return True"""
+        return True
 
 
 # ====================================================================
@@ -55,9 +119,9 @@ class ButtonWrapper(uiawrapper.UIAWrapper):
     """Wrap a UIA-compatible Button, CheckBox or RadioButton control"""
 
     _control_types = ['Button',
-        'CheckBox',
-        'RadioButton',
-    ]
+                      'CheckBox',
+                      'RadioButton'
+                      ]
 
     # -----------------------------------------------------------
     def __init__(self, elem):
@@ -125,6 +189,11 @@ class ButtonWrapper(uiawrapper.UIAWrapper):
         # Return itself so that action can be chained
         return self
 
+    # -----------------------------------------------------------
+    def items(self):
+        """Find all menu items"""
+        return self.children(control_type="MenuItem")
+
 
 # ====================================================================
 class ComboBoxWrapper(uiawrapper.UIAWrapper):
@@ -146,7 +215,7 @@ class ComboBoxWrapper(uiawrapper.UIAWrapper):
             super(ComboBoxWrapper, self).expand()
         except NoPatternInterfaceError:
             # workaround for WinForms combo box using Open button
-            open_buttons = self.children(title='Open', control_type='Button')
+            open_buttons = self.children(name='Open', control_type='Button')
             if open_buttons:
                 open_buttons[0].invoke()
             else:
@@ -165,7 +234,7 @@ class ComboBoxWrapper(uiawrapper.UIAWrapper):
             super(ComboBoxWrapper, self).collapse()
         except NoPatternInterfaceError:
             # workaround for WinForms combo box using Open button
-            close_buttons = self.children(title='Close', control_type='Button')
+            close_buttons = self.children(name='Close', control_type='Button')
             if not close_buttons:
                 if self.element_info.framework_id == 'WinForm':
                     return self # simple WinForms combo box is always expanded
@@ -240,25 +309,42 @@ class ComboBoxWrapper(uiawrapper.UIAWrapper):
             # Try to access the underlying ListBox explicitly
             children_lst = self.children(control_type='List')
             if len(children_lst) > 0:
-                children_lst[0]._select(item)
+                list_view = children_lst[0]
+                list_view.get_item(item).select()
                 # do health check and apply workaround for Qt5 combo box if necessary
-                if isinstance(item, six.string_types):
-                    item = children_lst[0].children(title=item)[0]
-                    if self.selected_text() != item:
-                        # workaround for WinForms combo box
-                        item.invoke()
-                        if self.selected_text() != item:
-                            # workaround for Qt5 combo box
-                            item.click_input()
-                            if self.selected_text() != item:
-                                item.click_input()
+                if isinstance(item, str):
+                    item_wrapper = list_view.children(name=item)[0]
+                    item_value = item_wrapper.window_text()
+                    if self.element_info.framework_id == 'Win32':
+                        if self.selected_text() != item_value:
+                            item_wrapper.invoke()
+                            if self.selected_text() != item_value:
+                                item_wrapper.click_input()
+                    elif self.element_info.framework_id == 'Qt':
+                        list_view._select(item)
+                        if list_view.is_active():
+                            item_wrapper.click_input()
+                    else:
+                        if self.selected_text() != item_value:
+                            # workaround for WinForms combo box
+                            item_wrapper.invoke()
+                            if self.selected_text() != item_value:
+                                # workaround for Qt5 combo box
+                                item_wrapper.click_input()
+                                if self.selected_text() != item_value:
+                                    item_wrapper.click_input()
                 elif self.selected_index() != item:
                     items = children_lst[0].children(control_type='ListItem')
                     if item < len(items):
-                        items[item].invoke()
+                        if self.element_info.framework_id == 'Qt':
+                            list_view._select(item)
+                            if list_view.is_active():
+                                items[item].click_input()
+                        else:
+                            items[item].invoke()
                     else:
                         raise IndexError('Item number #{} is out of range ' \
-                            '({} items in total)'.format(item, len(items)))
+                                         '({} items in total)'.format(item, len(items)))
             else:
                 raise IndexError("item '{0}' not found or can't be accessed".format(item))
         finally:
@@ -293,7 +379,16 @@ class ComboBoxWrapper(uiawrapper.UIAWrapper):
             return self.selected_item_index()
         except NoPatternInterfaceError:
             # workaround for Qt5 and WinForms
-            return self.texts().index(self.selected_text())
+            try:
+                children_list_element = self.children(control_type='List')[0]
+                children_list_element_values = children_list_element.texts()
+                if type(children_list_element_values[0]) is list:
+                    return children_list_element_values.index(self.selected_text().splitlines())
+                else:
+                    return children_list_element_values.index(self.selected_text())
+            except IndexError:
+                return self.texts().index(self.selected_text())
+
 
     # -----------------------------------------------------------
     def item_count(self):
@@ -432,28 +527,19 @@ class EditWrapper(uiawrapper.UIAWrapper):
             start, end = self.selection_indices()
             if pos_start is None:
                 pos_start = start
-            if pos_end is None and not isinstance(start, six.string_types):
+            if pos_end is None and not isinstance(start, str):
                 pos_end = end
         else:
             pos_start = 0
             pos_end = len(self.window_text())
 
-        if isinstance(text, six.text_type):
-            if six.PY3:
-                aligned_text = text
-            else:
-                aligned_text = text.encode(locale.getpreferredencoding())
-        elif isinstance(text, six.binary_type):
-            if six.PY3:
-                aligned_text = text.decode(locale.getpreferredencoding())
-            else:
-                aligned_text = text
+        if isinstance(text, str):
+            aligned_text = text
+        elif isinstance(text, bytes):
+            aligned_text = text.decode(locale.getpreferredencoding())
         else:
             # convert a non-string input
-            if six.PY3:
-                aligned_text = six.text_type(text)
-            else:
-                aligned_text = six.binary_type(text)
+            aligned_text = str(text)
 
         # Calculate new text value
         current_text = self.window_text()
@@ -464,7 +550,7 @@ class EditWrapper(uiawrapper.UIAWrapper):
         #win32functions.WaitGuiThreadIdle(self)
         #time.sleep(Timings.after_editsetedittext_wait)
 
-        if isinstance(aligned_text, six.text_type):
+        if isinstance(aligned_text, str):
             self.actions.log('Set text to the edit box: ' + aligned_text)
         else:
             self.actions.log(b'Set text to the edit box: ' + aligned_text)
@@ -481,12 +567,13 @@ class EditWrapper(uiawrapper.UIAWrapper):
         self.set_focus()
 
         # if we have been asked to select a string
-        if isinstance(start, six.text_type):
+        string_to_select = None
+        if isinstance(start, str):
             string_to_select = start
-        elif isinstance(start, six.binary_type):
+        elif isinstance(start, bytes):
             string_to_select = start.decode(locale.getpreferredencoding())
-        elif isinstance(start, six.integer_types):
-            if isinstance(end, six.integer_types) and start > end:
+        elif isinstance(start, int):
+            if isinstance(end, int) and start > end:
                 start, end = end, start
             string_to_select = self.window_text()[start:end]
 
@@ -583,27 +670,32 @@ class SliderWrapper(uiawrapper.UIAWrapper):
     # -----------------------------------------------------------
     def value(self):
         """Get a current position of slider's thumb"""
-        return self.iface_range_value.CurrentValue
+        try:
+            return self.iface_range_value.CurrentValue
+        except NoPatternInterfaceError:
+            return self.iface_value.CurrentValue
 
     # -----------------------------------------------------------
     def set_value(self, value):
         """Set position of slider's thumb"""
         if isinstance(value, float):
             value_to_set = value
-        elif isinstance(value, six.integer_types):
+        elif isinstance(value, int):
             value_to_set = value
-        elif isinstance(value, six.text_type):
+        elif isinstance(value, str):
             value_to_set = float(value)
         else:
             raise ValueError("value should be either string or number")
 
-        min_value = self.min_value()
-        max_value = self.max_value()
-        if not (min_value <= value_to_set <= max_value):
-            raise ValueError("value should be bigger than {0} and smaller than {1}".format(min_value, max_value))
+        try:
+            min_value = self.min_value()
+            max_value = self.max_value()
+            if not (min_value <= value_to_set <= max_value):
+                raise ValueError("value should be bigger than {0} and smaller than {1}".format(min_value, max_value))
 
-        self.iface_range_value.SetValue(value_to_set)
-
+            self.iface_range_value.SetValue(value_to_set)
+        except NoPatternInterfaceError:
+            self.iface_value.SetValue(str(value))
 
 # ====================================================================
 class HeaderWrapper(uiawrapper.UIAWrapper):
@@ -656,7 +748,7 @@ class ListItemWrapper(uiawrapper.UIAWrapper):
         Only items supporting Toggle pattern should answer.
         Raise NoPatternInterfaceError if the pattern is not supported
         """
-        return self.iface_toggle.ToggleState_On == toggle_state_on
+        return self.iface_toggle.CurrentToggleState == toggle_state_on
 
     def texts(self):
         """Return a list of item texts"""
@@ -700,13 +792,13 @@ class ListViewWrapper(uiawrapper.UIAWrapper):
 
     def __update_row_header(self):
         try:
-            self.row_header = all(isinstance(six.next(row.iter_children()), HeaderWrapper) for row in self.children())
+            self.row_header = all(isinstance(next(row.iter_children()), HeaderWrapper) for row in self.children())
         except StopIteration:
             self.row_header = False
 
     def __update_col_header(self):
         try:
-            self.col_header = all(isinstance(col, HeaderWrapper) for col in six.next(self.iter_children()).children())
+            self.col_header = all(isinstance(col, HeaderWrapper) for col in next(self.iter_children()).children())
         except StopIteration:
             self.col_header = False
 
@@ -802,7 +894,7 @@ class ListViewWrapper(uiawrapper.UIAWrapper):
         Mostly: TextBlock, ImageControl, EditControl, DataItem
         or even another layer of data items (Group, DataGrid)
         """
-        if not isinstance(row, six.integer_types) or not isinstance(column, six.integer_types):
+        if not isinstance(row, int) or not isinstance(column, int):
             raise TypeError("row and column must be numbers")
 
         if self.iface_grid_support:
@@ -829,7 +921,7 @@ class ListViewWrapper(uiawrapper.UIAWrapper):
           with the text of a cell in the row you want returned.
         """
         # Verify arguments
-        if isinstance(row, six.string_types):
+        if isinstance(row, str):
             # Try to find item using FindItemByProperty
             # That way we can get access to virtualized (unloaded) items
             try:
@@ -845,7 +937,7 @@ class ListViewWrapper(uiawrapper.UIAWrapper):
                 # com_elem is NULL pointer or item doesn't support ItemContainer pattern
                 # Get DataGrid row
                 try:
-                    itm = self.descendants(title=row)[0]
+                    itm = self.descendants(name=row)[0]
                     # Applications like explorer.exe usually return ListItem
                     # directly while other apps can return only a cell.
                     # In this case we need to take its parent - the whole row.
@@ -853,7 +945,7 @@ class ListViewWrapper(uiawrapper.UIAWrapper):
                         itm = itm.parent()
                 except IndexError:
                     raise ValueError("Element '{0}' not found".format(row))
-        elif isinstance(row, six.integer_types):
+        elif isinstance(row, int):
             # Get the item by a row index
             try:
                 com_elem = 0
@@ -947,12 +1039,11 @@ class MenuItemWrapper(uiawrapper.UIAWrapper):
         """Apply Select pattern"""
         try:
             self.iface_selection_item.Select()
-        except(NoPatternInterfaceError):
+        except NoPatternInterfaceError:
             try:
                 self.iface_invoke.Invoke()
-            except(NoPatternInterfaceError):
-                raise AttributeError
-
+            except comtypes.COMError:
+                self.click_input()
 
 # ====================================================================
 class MenuWrapper(uiawrapper.UIAWrapper):
@@ -984,7 +1075,7 @@ class MenuWrapper(uiawrapper.UIAWrapper):
             item.set_focus()
         try:
             item.expand()
-        except(NoPatternInterfaceError):
+        except NoPatternInterfaceError:
             if self.element_info.framework_id == 'WinForm' and not is_last:
                 item.select()
 
@@ -1099,7 +1190,7 @@ class ToolbarWrapper(uiawrapper.UIAWrapper):
         """Initialize the control"""
         super(ToolbarWrapper, self).__init__(elem)
         self.win32_wrapper = None
-        if not self.children() and self.element_info.handle is not None:
+        if len(self.children()) <= 1 and self.element_info.handle is not None:
             self.win32_wrapper = common_controls.ToolbarWrapper(self.element_info.handle)
 
     @property
@@ -1118,7 +1209,9 @@ class ToolbarWrapper(uiawrapper.UIAWrapper):
     def button_count(self):
         """Return a number of buttons on the ToolBar"""
         if self.win32_wrapper is not None:
-            return self.win32_wrapper.button_count()
+            # We need this workaround because win32_wrapper.button_count() takes duplicated buttons into account.
+            # This case is handled in ToolbarWrapper.buttons()
+            return len(self.buttons())
         else:
             return len(self.children())
 
@@ -1126,13 +1219,23 @@ class ToolbarWrapper(uiawrapper.UIAWrapper):
     def buttons(self):
         """Return all available buttons"""
         if self.win32_wrapper is not None:
-            btn_count = self.win32_wrapper.button_count()
             cc = []
-            for btn_num in range(btn_count):
-                relative_point = self.win32_wrapper.get_button_rect(btn_num).mid_point()
-                button_coord_x, button_coord_y = self.client_to_screen(relative_point)
-                btn_elem_info = UIAElementInfo.from_point(button_coord_x, button_coord_y)
-                cc.append(uiawrapper.UIAWrapper(btn_elem_info))
+            btn_count = self.win32_wrapper.button_count()
+            if btn_count:
+                # MFC toolbar replies on TB_BUTTONCOUNT window message
+                rectangles = []
+                for btn_num in range(btn_count):
+                    relative_point = self.win32_wrapper.get_button_rect(btn_num).mid_point()
+                    button_coord_x, button_coord_y = self.client_to_screen(relative_point)
+                    btn_elem_info = uia_element_info.UIAElementInfo.from_point(button_coord_x, button_coord_y)
+                    button = uiawrapper.UIAWrapper(btn_elem_info)
+                    if button.element_info.rectangle not in rectangles:
+                        cc.append(button)
+                        rectangles.append(button.element_info.rectangle)
+            else:
+                # Qt5 toolbar doesn't reply on TB_BUTTONCOUNT window message
+                for btn in self.win32_wrapper.children():
+                    cc.append(uiawrapper.UIAWrapper(uia_element_info.UIAElementInfo(btn.handle)))
         else:
             cc = self.children()
         return cc
@@ -1149,7 +1252,7 @@ class ToolbarWrapper(uiawrapper.UIAWrapper):
         cc = self.buttons()
         texts = [c.window_text() for c in cc]
 
-        if isinstance(button_identifier, six.string_types):
+        if isinstance(button_identifier, str):
             self.actions.log('Toolbar buttons: ' + str(texts))
 
             if exact:
@@ -1199,6 +1302,108 @@ class ToolbarWrapper(uiawrapper.UIAWrapper):
         self.actions.logSectionEnd()
         return button
 
+    # -----------------------------------------------------------
+    def _activate(self, item, is_last):
+        """Activate the specified item"""
+        if not item.is_active():
+            item.set_focus()
+        try:
+            item.expand()
+        except NoPatternInterfaceError:
+            if not is_last:
+                item.select()
+
+    # -----------------------------------------------------------
+    def _sub_item_by_text(self, menu, name, exact, is_last):
+        """Find a sub-item by the specified text"""
+        sub_item = None
+        items = menu.items()
+        if items:
+            if exact:
+                for i in items:
+                    if name == i.window_text():
+                        sub_item = i
+                        break
+            else:
+                texts = []
+                for i in items:
+                    texts.append(i.window_text())
+                sub_item = findbestmatch.find_best_match(name, texts, items)
+
+        self._activate(sub_item, is_last)
+
+        return sub_item
+
+    # -----------------------------------------------------------
+    def _sub_item_by_idx(self, menu, idx, is_last):
+        """Find a sub-item by the specified index"""
+        sub_item = None
+        items = menu.items()
+        if items:
+            sub_item = items[idx]
+        self._activate(sub_item, is_last)
+        return sub_item
+
+    # ----------------------------------------------------------------
+    items = buttons
+
+    def item_by_path(self, path, exact=False):
+        """
+        Walk the items in this toolbar to find the item specified by a path
+
+        The path is specified by a list of items separated by '->'. Each item
+        can be either a string (can include spaces) e.g. "Save As" or a zero
+        based index of the item to return prefaced by # e.g. #1.
+
+        These can be mixed as necessary. For example:
+            - "#0->Save As",
+            - "Tools->#0->Configure"
+
+        * **path** - Path to the specified item. **Required**.
+        * **exact** - If false, text matching will use a 'best match' fuzzy algorithm. If true, will try to find the
+                      item with the given name. (Default False). **Optional**
+        """
+        toolbar_items = [p.strip() for p in path.split("->")]
+        items_cnt = len(toolbar_items)
+        if items_cnt == 0:
+            raise IndexError("Empty path is not accepted by the method!")
+        for item in toolbar_items:
+            if not item:
+                raise IndexError("Empty item name between '->' separators")
+
+        def next_level_menu(parent_menu, item_name, is_last):
+            if item_name.startswith("#"):
+                return self._sub_item_by_idx(parent_menu, int(item_name[1:]), is_last)
+            else:
+                return self._sub_item_by_text(parent_menu, item_name, exact, is_last)
+
+        if items_cnt == 1:
+            menu = next_level_menu(self, toolbar_items[0], True)
+            return menu
+
+        menu = self
+        new_descendants = []
+        for i in range(items_cnt):
+            descendants_before = self.top_level_parent().descendants()
+            if len(new_descendants) == 0:
+                menu = next_level_menu(menu, toolbar_items[i], items_cnt == i + 1)
+            else:
+                new_descendants.append(menu)
+                try:
+                    for ctrl in new_descendants[::-1]:
+                        try:
+                            menu = next_level_menu(ctrl, toolbar_items[i], items_cnt == i + 1)
+                        except AttributeError:
+                            pass
+                except findbestmatch.MatchError:
+                    raise AttributeError("Could not find '{}' as a child of one of the following controls: {}".format(
+                        toolbar_items[i], new_descendants
+                    ))
+            descendants_after = self.top_level_parent().descendants()
+            new_descendants = list(set(descendants_after) - set(descendants_before))
+
+        return menu
+
 
 # ====================================================================
 class TreeItemWrapper(uiawrapper.UIAWrapper):
@@ -1225,7 +1430,7 @@ class TreeItemWrapper(uiawrapper.UIAWrapper):
         Only items supporting Toggle pattern should answer.
         Raise NoPatternInterfaceError if the pattern is not supported
         """
-        return (self.iface_toggle.ToggleState_On == toggle_state_on)
+        return (self.iface_toggle.CurrentToggleState == toggle_state_on)
 
     # -----------------------------------------------------------
     def ensure_visible(self):
@@ -1241,7 +1446,7 @@ class TreeItemWrapper(uiawrapper.UIAWrapper):
         with the best match for the string.
         """
         cc = self.children(control_type='TreeItem')
-        if isinstance(child_spec, six.string_types):
+        if isinstance(child_spec, str):
             texts = [c.window_text() for c in cc]
             if exact:
                 if child_spec in texts:
@@ -1339,7 +1544,7 @@ class TreeViewWrapper(uiawrapper.UIAWrapper):
             return None
 
         # Ensure the path is absolute
-        if isinstance(path, six.string_types):
+        if isinstance(path, str):
             if not path.startswith("\\"):
                 raise RuntimeError(
                     "Only absolute paths allowed - "
@@ -1375,7 +1580,7 @@ class TreeViewWrapper(uiawrapper.UIAWrapper):
                 current_elem.expand()
                 current_elem = current_elem.get_child(child_spec, exact)
             except IndexError:
-                if isinstance(child_spec, six.string_types):
+                if isinstance(child_spec, str):
                     raise IndexError("Item '{0}' does not have a child '{1}'".format(
                                      current_elem.window_text(), child_spec))
                 else:

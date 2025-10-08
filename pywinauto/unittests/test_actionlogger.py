@@ -37,10 +37,10 @@ import os
 import sys
 import logging
 import mock
-from six.moves import reload_module
+import importlib
 sys.path.append(".")
 from pywinauto import actionlogger  # noqa: E402
-from pywinauto.application import Application  # noqa: E402
+from pywinauto.windows.application import Application  # noqa: E402
 from pywinauto.sysinfo import is_x64_Python  # noqa: E402
 from pywinauto.sysinfo import is_x64_OS  # noqa: E402
 from pywinauto.timings import Timings  # noqa: E402
@@ -91,7 +91,7 @@ class ActionLoggerOnStadardLoggerTestCases(unittest.TestCase):
         self.assertEqual(self.__lineCount(), prev_line_count + 1)
 
         actionlogger.enable()
-        self.app.window(title='About Notepad').OK.click()
+        self.app.window(name='About Notepad').OK.click()
         self.assertEqual(self.__lineCount(), prev_line_count + 2)
 
 
@@ -118,7 +118,7 @@ class ActionLoggerOnCustomLoggerTestCases(unittest.TestCase):
             self.logger_patcher.stop()
 
         self.module_patcher.stop()
-        reload_module(actionlogger)
+        importlib.reload(actionlogger)
 
     def test_import_clash(self):
         """Test a custom logger import clash: issue #315"""
@@ -131,7 +131,7 @@ class ActionLoggerOnCustomLoggerTestCases(unittest.TestCase):
         self.module_patcher = mock.patch.dict('sys.modules', self.modules)
         self.module_patcher.start()
 
-        reload_module(actionlogger)
+        importlib.reload(actionlogger)
         self.assertEqual(False, actionlogger._found_logger)
 
         # Verify the fallback to the standard logger
@@ -140,7 +140,7 @@ class ActionLoggerOnCustomLoggerTestCases(unittest.TestCase):
 
     def test_import_custom_logger(self):
         """Test if custom logger class can be imported"""
-        reload_module(actionlogger)
+        importlib.reload(actionlogger)
         self.assertEqual(True, actionlogger._found_logger)
 
         # Check there is no instance of logger created on import
@@ -151,7 +151,7 @@ class ActionLoggerOnCustomLoggerTestCases(unittest.TestCase):
 
     def test_logger_disable_and_reset(self):
         """Test if the logger can be disabled and level reset"""
-        reload_module(actionlogger)
+        importlib.reload(actionlogger)
 
         # verify on mock
         self.logger_patcher = mock.patch('pywinauto.actionlogger.ActionLogger', spec=True)
@@ -165,7 +165,7 @@ class ActionLoggerOnCustomLoggerTestCases(unittest.TestCase):
 
     def test_logger_enable_mapped_to_reset_level(self):
         """Test if the logger enable is mapped to reset_level"""
-        reload_module(actionlogger)
+        importlib.reload(actionlogger)
 
         # verify on mock
         self.logger_patcher = mock.patch('pywinauto.actionlogger.ActionLogger', spec=True)

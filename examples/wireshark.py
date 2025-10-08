@@ -27,6 +27,7 @@ def generate_data_file(t_interval, interface_name, file_name):
             app = Application(backend='uia').start(wireshark_file)
         else:
             print("Can't find wireshark on your computer")
+            sys.exit(1)
 
     win = app['The Wireshark Network Analyzer']
 
@@ -42,7 +43,7 @@ def generate_data_file(t_interval, interface_name, file_name):
         tree.get_item(interface_name).double_click_input()
     except Exception:
         print('No such interface')
-        exit()
+        sys.exit(1)
 
     win = app['Dialog']
 
@@ -144,7 +145,7 @@ if (len(sys.argv) < 3):
 Usage: python wireshark.py <capture_time (seconds)> <network_connection_name>
 Example: python wireshark.py 5 Ethernet
 It will capture all the packets from "Ethernet" interface during 5 seconds.''')
-    exit()
+    sys.exit()
 else:
     t_interval = int(sys.argv[1])
     interface_name = sys.argv[2]

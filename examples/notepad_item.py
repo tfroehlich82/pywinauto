@@ -34,6 +34,7 @@ from __future__ import unicode_literals
 from __future__ import print_function
 
 from pywinauto import application
+
 #from pywinauto import tests
 #from pywinauto.findbestmatch import MatchError
 
@@ -71,7 +72,7 @@ app['ConnectToPrinter']['OK'].close_click()
 app['PageSetupDlg2']['Properties'].click()
 
 # ----- Document Properties Dialog ----
-doc_props = app.window(title_re = ".*Document Properties")
+doc_props = app.window(name_re = ".*Document Properties")
 
 # Two ways of selecting tabs
 doc_props['TabCtrl'].select(2)
@@ -87,7 +88,7 @@ advbutton.click()
 
 # ----- Advanced Options Dialog ----
 # close the 4 windows
-app.window(title_re = ".* Advanced Options")['Ok'].click()
+app.window(name_re = ".* Advanced Options")['Ok'].click()
 
 # ----- Document Properties Dialog again ----
 doc_props['Cancel'].close_click()

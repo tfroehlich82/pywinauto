@@ -83,7 +83,7 @@ TaskBar = explorer_app.window(handle=TaskBarHandle())
 
 # The Start button
 try:
-    StartButton = explorer_app.window(title='Start', class_name='Button').wait('exists', 0.1) # Win7
+    StartButton = explorer_app.window(name='Start', class_name='Button').wait('exists', 0.1) # Win7
 except Exception:
     StartButton = TaskBar.Start # Win8.1
 
@@ -98,7 +98,7 @@ ShowDesktop = TaskBar.TrayShowDesktopButtonWClass
 
 # these are the icons - what people normally think of
 # as the system tray
-SystemTrayIcons = TaskBar.child_window(class_name="ToolbarWindow32", found_index=0)
+SystemTrayIcons = TaskBar.by(class_name="ToolbarWindow32", found_index=0)
 
 # the toolbar with the running applications
 RunningApplications = TaskBar.MSTaskListWClass

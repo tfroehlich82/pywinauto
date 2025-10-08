@@ -58,6 +58,8 @@ The Following are the individual timing settings that can be adjusted:
 * exists_timeout  (default .5)
 * exists_retry   (default .3)
 
+* after_invoke_wait (default .1)
+
 * after_click_wait  (default .09)
 * after_clickinput_wait (default .09)
 
@@ -111,7 +113,6 @@ The Following are the individual timing settings that can be adjusted:
 
 """
 
-import six
 import time
 import operator
 from functools import wraps
@@ -139,6 +140,8 @@ class TimeConfig(object):
 
         'exists_timeout': .5,
         'exists_retry': .3,
+
+        'after_invoke_wait': .1,
 
         'after_click_wait': .09,
         'after_clickinput_wait': .09,
@@ -294,10 +297,7 @@ class TimeoutError(RuntimeError):
 
 
 #=========================================================================
-if six.PY3:
-    _clock_func = time.perf_counter
-else:
-    _clock_func = time.clock
+_clock_func = time.perf_counter
 
 
 def timestamp():
@@ -451,8 +451,6 @@ def wait_until_passes(timeout,
                 time.sleep(min(retry_interval, time_left))
 
             else:
-                # Raise a TimeoutError - and put the original exception
-                # inside it
                 err = TimeoutError()
                 err.original_exception = e
                 raise err

@@ -33,7 +33,6 @@
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import six
 import time
 #import pprint
 #import pdb
@@ -52,18 +51,21 @@ from pywinauto.application import Application  # noqa E402
 from pywinauto.controls.hwndwrapper import HwndWrapper  # noqa E402
 from pywinauto.controls.hwndwrapper import InvalidWindowHandle  # noqa E402
 from pywinauto.controls.hwndwrapper import get_dialog_props_from_handle  # noqa E402
-from pywinauto import win32structures  # noqa E402
-from pywinauto import win32defines  # noqa E402
+from pywinauto.windows import win32structures  # noqa E402
+from pywinauto.windows import win32defines  # noqa E402
 from pywinauto.findwindows import ElementNotFoundError  # noqa E402
 from pywinauto.sysinfo import is_x64_Python  # noqa E402
 from pywinauto.sysinfo import is_x64_OS  # noqa E402
-from pywinauto.remote_memory_block import RemoteMemoryBlock  # noqa E402
+from pywinauto.windows.remote_memory_block import RemoteMemoryBlock  # noqa E402
 from pywinauto.timings import Timings  # noqa E402
 from pywinauto import clipboard  # noqa E402
 from pywinauto.base_wrapper import ElementNotEnabled  # noqa E402
 from pywinauto.base_wrapper import ElementNotVisible  # noqa E402
 from pywinauto import findbestmatch  # noqa E402
 from pywinauto import keyboard  # noqa E402
+from pywinauto import Desktop  # noqa E402
+from pywinauto import timings  # noqa E402
+from pywinauto import WindowNotFoundError  # noqa E402
 
 
 mfc_samples_folder = os.path.join(
@@ -97,11 +99,22 @@ class HwndWrapperTests(unittest.TestCase):
         #self.dlg.menu_select('View->Scientific\tAlt+2')
         #self.ctrl = HwndWrapper(self.dlg.Button2.handle) # Backspace
 
+    def test_get_active_hwnd(self):
+        focused_element = self.dlg.find().get_active()
+        self.assertTrue(type(focused_element) is HwndWrapper or issubclass(type(focused_element), HwndWrapper))
+
     def tearDown(self):
         """Close the application after tests"""
         #self.dlg.type_keys("%{F4}")
         #self.dlg.close()
         self.app.kill()
+
+    def test_close_not_found(self):
+        """Test dialog close handle non existing window"""
+        wrp = self.dlg.find()
+        with mock.patch.object(timings, 'wait_until') as mock_wait_until:
+            mock_wait_until.side_effect = timings.TimeoutError
+            self.assertRaises(WindowNotFoundError, wrp.close)
 
     def test_scroll(self):
         """Test control scrolling"""
@@ -237,15 +250,19 @@ class HwndWrapperTests(unittest.TestCase):
         self.assertEqual(self.ctrl.top_level_parent(), self.dlg.handle)
         self.assertEqual(self.dlg.top_level_parent(), self.dlg.handle)
 
+    def test_get_active_desktop_hwnd(self):
+        focused_element = Desktop(backend="win32").get_active()
+        self.assertTrue(type(focused_element) is HwndWrapper or issubclass(type(focused_element), HwndWrapper))
+
     def testTexts(self):
         self.assertEqual(self.dlg.texts(), ['Common Controls Sample'])
         self.assertEqual(HwndWrapper(self.dlg.Show.handle).texts(), [u'Show'])
-        self.assertEqual(self.dlg.child_window(class_name='Button', found_index=2).texts(), [u'Elevation Icon'])
+        self.assertEqual(self.dlg.by(class_name='Button', found_index=2).texts(), [u'Elevation Icon'])
 
     def testFoundIndex(self):
         """Test an access to a control by found_index"""
 
-        ctl = self.dlg.child_window(class_name='Button', found_index=3)
+        ctl = self.dlg.by(class_name='Button', found_index=3)
         self.assertEqual(ctl.texts(), [u'Show'])
         ctl.draw_outline('blue')  # visualize
 
@@ -255,8 +272,8 @@ class HwndWrapperTests(unittest.TestCase):
         # The exception is raised later when we try to find the window.
         # For this reason we can't use an assertRaises statement here because
         # the exception is raised before actual call to DrawOutline
-        ctl = self.dlg.child_window(class_name='Button', found_index=3333)
-        self.assertRaises(ElementNotFoundError, ctl.wrapper_object)
+        ctl = self.dlg.by(class_name='Button', found_index=3333)
+        self.assertRaises(ElementNotFoundError, ctl.find)
 
     def testSearchWithPredicateFunc(self):
         """Test an access to a control by filtering with a predicate function"""
@@ -271,7 +288,7 @@ class HwndWrapperTests(unittest.TestCase):
                     res = True
             return res
 
-        ctl = self.dlg.child_window(predicate_func=is_checkbox)
+        ctl = self.dlg.by(predicate_func=is_checkbox)
         self.assertEqual(ctl.texts(), [u'Show'])
         ctl.draw_outline('red')  # visualize
 
@@ -288,7 +305,7 @@ class HwndWrapperTests(unittest.TestCase):
         self.assertNotEqual(self.dlg.children(), [])
 
     def testIsChild(self):
-        self.assertEqual(self.ctrl.is_child(self.dlg.wrapper_object()), True)
+        self.assertEqual(self.ctrl.is_child(self.dlg.find()), True)
         self.assertEqual(self.dlg.is_child(self.ctrl), False)
 
     def testSendMessage(self):
@@ -326,15 +343,6 @@ class HwndWrapperTests(unittest.TestCase):
         actual = self.dlg.Edit.texts()[0]
         expected = "Hawaii#%@$"
         self.assertEqual(expected, actual)
-
-    def test_send_keystrokes_enter(self):
-        with self.assertRaises(findbestmatch.MatchError):
-            testString = "{ENTER}"
-
-            self.dlg.minimize()
-            self.dlg.Edit.send_keystrokes(testString)
-
-            self.dlg.restore()
 
     def test_send_keystrokes_virtual_keys_left_del_back(self):
         testString = "+hello123{LEFT 2}{DEL 2}{BACKSPACE} +world"
@@ -441,7 +449,7 @@ class HwndWrapperTests(unittest.TestCase):
 #    def testVerifyActionable(self):
 
     def testMoveWindow_same(self):
-        """Test calling movewindow without any parameters"""
+        """Test calling move_window without any parameters"""
         prevRect = self.dlg.rectangle()
         self.dlg.move_window()
         self.assertEqual(prevRect, self.dlg.rectangle())
@@ -539,12 +547,9 @@ class HwndWrapperTests(unittest.TestCase):
 
     def test_pretty_print(self):
         """Test __str__ method for HwndWrapper based controls"""
-        if six.PY3:
-            assert_regex = self.assertRegex
-        else:
-            assert_regex = self.assertRegexpMatches
+        assert_regex = self.assertRegex
 
-        wrp = self.dlg.wrapper_object()
+        wrp = self.dlg.find()
         assert_regex(wrp.__str__(), "^hwndwrapper.DialogWrapper - 'Common Controls Sample', Dialog$")
         assert_regex(wrp.__repr__(), "^<hwndwrapper.DialogWrapper - 'Common Controls Sample', Dialog, [0-9-]+>$")
 
@@ -552,15 +557,50 @@ class HwndWrapperTests(unittest.TestCase):
         assert_regex(wrp.__str__(), "^win32_controls.ButtonWrapper - 'Command button here', Button$")
         assert_regex(wrp.__repr__(), "^<win32_controls.ButtonWrapper - 'Command button here', Button, [0-9-]+>$")
 
-        wrp = self.dlg.TabControl.wrapper_object()
+        wrp = self.dlg.TabControl.find()
         assert_regex(wrp.__str__(), "^common_controls.TabControlWrapper - '', TabControl$")
         assert_regex(wrp.__repr__(), "^<common_controls.TabControlWrapper - '', TabControl, [0-9-]+>$")
 
     def test_children_generator(self):
-        dlg = self.dlg.wrapper_object()
+        dlg = self.dlg.find()
         children = [child for child in dlg.iter_children()]
         self.assertSequenceEqual(dlg.children(), children)
 
+
+class SendKeystrokesTests(unittest.TestCase):
+    """Unit tests for the SendKeyStrokes class"""
+
+    def setUp(self):
+        """Set some data and ensure the application is in the state we want"""
+        Timings.fast()
+        notepad2_mod_folder = os.path.join(
+        os.path.dirname(__file__), r"..\..\apps\Notepad2-mod")
+        if is_x64_Python():
+            notepad2_mod_folder = os.path.join(notepad2_mod_folder, 'x64')
+        self.app = Application().start(os.path.join(notepad2_mod_folder, u"Notepad2.exe"))
+
+        self.dlg = self.app.window(name_re=".*Untitled - Notepad2-mod", visible=None)
+        self.ctrl = HwndWrapper(self.dlg.Scintilla.handle)
+
+        #self.dlg = self.app.Calculator
+        #self.dlg.menu_select('View->Scientific\tAlt+2')
+        #self.ctrl = HwndWrapper(self.dlg.Button2.handle) # Backspace
+
+    def tearDown(self):
+        """Close the application after tests"""
+        #self.dlg.type_keys("%{F4}")
+        #self.dlg.close()
+        self.app.kill()
+
+    def test_send_keystrokes_enter(self):
+        expected = "some test string"
+
+        self.dlg.minimize()
+        self.ctrl.send_keystrokes(expected)
+        self.ctrl.send_keystrokes("{ENTER}") # click set button
+        self.dlg.restore()
+        actual = self.ctrl.window_text()
+        self.assertEqual(expected + "\r\n", actual)
 
 class HwndWrapperMenuTests(unittest.TestCase):
 
@@ -573,7 +613,7 @@ class HwndWrapperMenuTests(unittest.TestCase):
         self.app = Application().start(os.path.join(mfc_samples_folder, u"RowList.exe"))
 
         self.dlg = self.app.RowListSampleApplication
-        self.ctrl = self.app.RowListSampleApplication.ListView.wrapper_object()
+        self.ctrl = self.app.RowListSampleApplication.ListView.find()
 
     def tearDown(self):
         """Close the application after tests"""
@@ -601,17 +641,17 @@ class HwndWrapperMenuTests(unittest.TestCase):
 
         # make sure it is open and visible
         self.app.AboutRowList.wait("visible", 20)
-        self.assertTrue(self.app.window(title='About RowList').is_visible(), True)
+        self.assertTrue(self.app.window(name='About RowList').is_visible(), True)
 
         # close it
-        self.app.window(title='About RowList', class_name='#32770').close(1)
+        self.app.window(name='About RowList', class_name='#32770').close(1)
 
         # make sure that it is not visible
         try:
             #self.assertRaises(ElementNotFoundError,
-            #                  self.app.window(title='About RowList', class_name='#32770').wrapper_object())
+            #                  self.app.window(name='About RowList', class_name='#32770').wrapper_object())
             # vvryabov: TimeoutError is caught by assertRaises, so the second raise is not caught correctly
-            self.app.window(title='About RowList', class_name='#32770').wrapper_object()
+            self.app.window(name='About RowList', class_name='#32770').find()
         except ElementNotFoundError:
             print('ElementNotFoundError exception is raised as expected. OK.')
 
@@ -635,7 +675,7 @@ class HwndWrapperMenuTests(unittest.TestCase):
 
     def testCloseAltF4(self):
         self.dlg.menu_select('Help->About RowList...')
-        AboutRowList = self.app.window(title='About RowList', active_only=True, class_name='#32770')
+        AboutRowList = self.app.window(name='About RowList', active_only=True, class_name='#32770')
         AboutWrapper = AboutRowList.wait("enabled")
         AboutRowList.close_alt_f4()
         AboutRowList.wait_not('visible')
@@ -749,14 +789,14 @@ class NonActiveWindowFocusTests(unittest.TestCase):
         """Check HwndWrapper.set_focus for a desktop without a focused window"""
         ws = self.app.Common_Controls_Sample
         ws.TabControl.select('CButton (Command Link)')
-        dlg1 = ws.wrapper_object()
-        dlg2 = self.app2.Notepad.wrapper_object()
+        dlg1 = ws.find()
+        dlg2 = self.app2.Notepad.find()
         dlg2.click(coords=(2, 2))
         dlg2.minimize()
         # here is the trick: the window is restored but it isn't activated
         dlg2.restore()
         dlg1.set_focus()
-        self.assertEqual(ws.get_focus(), ws.Edit.wrapper_object())
+        self.assertEqual(ws.get_focus(), ws.Edit.find())
 
 
 class WindowWithoutMessageLoopFocusTests(unittest.TestCase):
@@ -811,7 +851,7 @@ class NotepadRegressionTests(unittest.TestCase):
         self.app = Application()
         self.app.start(_notepad_exe())
 
-        self.dlg = self.app.window(title='Untitled - Notepad', class_name='Notepad')
+        self.dlg = self.app.window(name='Untitled - Notepad', class_name='Notepad')
         self.ctrl = HwndWrapper(self.dlg.Edit.handle)
         self.dlg.Edit.set_edit_text("Here is some text\r\n and some more")
 
@@ -852,7 +892,7 @@ class NotepadRegressionTests(unittest.TestCase):
         self.dlg.menu_select("Edit->Paste")
 
         self.app2.UntitledNotepad.menu_select("File->Exit")
-        self.app2.window(title='Notepad', class_name='#32770')["Don't save"].click()
+        self.app2.window(name='Notepad', class_name='#32770')["Don't save"].click()
 
         self.assertEqual(self.dlg.Edit.text_block().encode(locale.getpreferredencoding()), text * 3)
 
@@ -871,7 +911,7 @@ class ControlStateTests(unittest.TestCase):
 
         self.dlg = self.app.Common_Controls_Sample
         self.dlg.TabControl.select(4)
-        self.ctrl = self.dlg.EditBox.wrapper_object()
+        self.ctrl = self.dlg.EditBox.find()
 
     def tearDown(self):
         """Close the application after tests"""
@@ -899,7 +939,7 @@ class DragAndDropTests(unittest.TestCase):
         self.app.start(os.path.join(mfc_samples_folder, u"CmnCtrl1.exe"))
 
         self.dlg = self.app.Common_Controls_Sample
-        self.ctrl = self.dlg.TreeView.wrapper_object()
+        self.ctrl = self.dlg.TreeView.find()
 
     def tearDown(self):
         """Close the application after tests"""
@@ -1013,7 +1053,7 @@ class RemoteMemoryBlockTests(unittest.TestCase):
         self.app.start(os.path.join(mfc_samples_folder, u"CmnCtrl1.exe"))
 
         self.dlg = self.app.Common_Controls_Sample
-        self.ctrl = self.dlg.TreeView.wrapper_object()
+        self.ctrl = self.dlg.TreeView.find()
 
     def tearDown(self):
         """Close the application after tests"""

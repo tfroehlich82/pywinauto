@@ -34,19 +34,21 @@
 from __future__ import unicode_literals
 from __future__ import print_function
 
-import six
 import time
 import warnings
 import comtypes
+import threading
 
 from .. import backend
+from .. import WindowNotFoundError  # noqa #E402
 from ..timings import Timings
-from ..base_wrapper import BaseWrapper
+from .win_base_wrapper import WinBaseWrapper
+from .hwndwrapper import HwndWrapper
 from ..base_wrapper import BaseMeta
 
-from ..uia_defines import IUIA
-from .. import uia_defines as uia_defs
-from ..uia_element_info import UIAElementInfo, elements_from_uia_array
+from ..windows.uia_defines import IUIA
+from ..windows import uia_defines as uia_defs
+from ..windows.uia_element_info import UIAElementInfo, elements_from_uia_array
 
 # region PATTERNS
 AutomationElement = IUIA().ui_automation_client.IUIAutomationElement
@@ -152,19 +154,19 @@ class UiaMeta(BaseMeta):
     @staticmethod
     def find_wrapper(element):
         """Find the correct wrapper for this UIA element"""
-        # Set a general wrapper by default
-        wrapper_match = UIAWrapper
 
         # Check for a more specific wrapper in the registry
-        if element.control_type in UiaMeta.control_type_to_cls:
+        try:
             wrapper_match = UiaMeta.control_type_to_cls[element.control_type]
+        except KeyError:
+            # Set a general wrapper by default
+            wrapper_match = UIAWrapper
 
         return wrapper_match
 
 
 # =========================================================================
-@six.add_metaclass(UiaMeta)
-class UIAWrapper(BaseWrapper):
+class UIAWrapper(WinBaseWrapper, metaclass=UiaMeta):
 
     """
     Default wrapper for User Interface Automation (UIA) controls.
@@ -195,12 +197,7 @@ class UIAWrapper(BaseWrapper):
         If the handle is not valid then an InvalidWindowHandle error
         is raised.
         """
-        BaseWrapper.__init__(self, element_info, backend.registry.backends['uia'])
-
-    # ------------------------------------------------------------
-    def __hash__(self):
-        """Return a unique hash value based on the element's Runtime ID"""
-        return hash(self.element_info.runtime_id)
+        WinBaseWrapper.__init__(self, element_info, backend.registry.backends['uia'])
 
     # ------------------------------------------------------------
     @lazy_property
@@ -336,6 +333,13 @@ class UIAWrapper(BaseWrapper):
         return uia_defs.get_elem_interface(elem, "VirtualizedItem")
 
     # ------------------------------------------------------------
+    @lazy_property
+    def iface_legacy_iaccessible(self):
+        """Get the element's LegacyIAccessible interface pattern"""
+        elem = self.element_info.element
+        return uia_defs.get_elem_interface(elem, "LegacyIAccessible")
+
+    # ------------------------------------------------------------
     @property
     def writable_props(self):
         """Extend default properties list."""
@@ -386,7 +390,7 @@ class UIAWrapper(BaseWrapper):
     #------------------------------------------------------------
     def automation_id(self):
         """Return the Automation ID of the control"""
-        return self.element_info.automation_id
+        return self.element_info.auto_id
 
     # -----------------------------------------------------------
     def is_keyboard_focusable(self):
@@ -411,13 +415,36 @@ class UIAWrapper(BaseWrapper):
             pass
         try:
             self.element_info.element.SetFocus()
+
+            # SetFocus() can return S_OK even if the element isn't focused actually
+            active_element = UIAElementInfo.get_active()
+            if self.element_info != active_element and self.element_info != active_element.top_level_parent:
+                if self.handle:
+                    warnings.warn("Failed to set focus on element, trying win32 backend", RuntimeWarning)
+                    HwndWrapper(self.element_info).set_focus()
+                else:
+                    warnings.warn("The element has not been focused because UIA SetFocus() failed "
+                                  "and we can't use win32 backend instead because "
+                                  "the element doesn't have native handle", RuntimeWarning)
         except comtypes.COMError as exc:
-            warnings.warn('The window has not been focused due to ' \
-                'COMError: {}'.format(exc), RuntimeWarning)
+            if self.handle:
+                warnings.warn("Failed to set focus on element due to COMError: {}, "
+                              "trying win32 backend".format(exc), RuntimeWarning)
+                HwndWrapper(self.element_info).set_focus()
+            else:
+                warnings.warn("The element has not been focused due to COMError: {}, "
+                              "and we can't use win32 backend instead because "
+                              "the element doesn't have native handle".format(exc), RuntimeWarning)
 
         return self
 
     # TODO: figure out how to implement .has_focus() method (if no handle available)
+
+    # -----------------------------------------------------------
+    def set_value(self, value):
+        """An interface to the SetValue method of the Value control pattern"""
+        self.iface_value.SetValue(value)
+        return self
 
     # -----------------------------------------------------------
     def close(self):
@@ -427,6 +454,10 @@ class UIAWrapper(BaseWrapper):
         Only a control supporting Window pattern should answer.
         If it doesn't (menu shadows, tooltips,...), try to send "Esc" key
         """
+        if not self.is_visible() or \
+                not self.is_enabled():
+            return
+
         try:
             name = self.element_info.name
             control_type = self.element_info.control_type
@@ -437,7 +468,10 @@ class UIAWrapper(BaseWrapper):
             if name and control_type:
                 self.actions.log("Closed " + control_type.lower() + ' "' +  name + '"')
         except(uia_defs.NoPatternInterfaceError):
-            self.type_keys("{ESC}")
+            try:
+                self.type_keys("{ESC}")
+            except comtypes.COMError:
+                raise WindowNotFoundError
 
     # -----------------------------------------------------------
     def minimize(self):
@@ -509,8 +543,19 @@ class UIAWrapper(BaseWrapper):
         """An interface to the Invoke method of the Invoke control pattern"""
         name = self.element_info.name
         control_type = self.element_info.control_type
+        invoke_pattern_iface = self.iface_invoke
 
-        self.iface_invoke.Invoke()
+        # sometimes .Invoke() can hang, although an action (such as button click) was completed successfully
+        def watchdog():
+            thread = threading.Thread(target=invoke_pattern_iface.Invoke)
+            thread.daemon = True
+            thread.start()
+            thread.join(2.)
+            if thread.is_alive():
+                warnings.warn('Timeout for InvokePattern.Invoke() call was exceeded', RuntimeWarning)
+        watchdog_thread = threading.Thread(target=watchdog)
+        watchdog_thread.start()
+        watchdog_thread.join(Timings.after_invoke_wait)
 
         if name and control_type:
             self.actions.log("Invoked " + control_type.lower() + ' "' + name + '"')
@@ -602,7 +647,16 @@ class UIAWrapper(BaseWrapper):
         Usually applied for controls like: a radio button, a tree view item
         or a list item.
         """
-        self.iface_selection_item.Select()
+        try:
+            self.iface_selection_item.Select()
+        except comtypes.COMError:
+            # retry
+            time.sleep(Timings.after_tabselect_wait)
+            self.iface_selection_item.Select()
+
+        if not self.is_selected():
+            warnings.warn("SelectionItem.Select failed, trying LegacyIAccessible.DoDefaultAction", RuntimeWarning)
+            self.iface_legacy_iaccessible.DoDefaultAction()
 
         name = self.element_info.name
         control_type = self.element_info.control_type
@@ -660,20 +714,23 @@ class UIAWrapper(BaseWrapper):
         The action can be applied for dirrent controls with items:
         ComboBox, TreeView, Tab control
         """
-        if isinstance(item, six.integer_types):
+        if isinstance(item, int):
             item_index = item
             title = None
-        elif isinstance(item, six.string_types):
+        elif isinstance(item, str):
             item_index = 0
             title = item
         else:
             err_msg = u"unsupported {0} for item {1}".format(type(item), item)
             raise ValueError(err_msg)
 
-        list_ = self.children(title=title)
+        list_ = self.children(name=title)
         if item_index < len(list_):
             wrp = list_[item_index]
             wrp.iface_selection_item.Select()
+            if not wrp.is_selected():
+                warnings.warn("SelectionItem.Select failed, trying LegacyIAccessible.DoDefaultAction", RuntimeWarning)
+                wrp.iface_legacy_iaccessible.DoDefaultAction()
         else:
             raise IndexError("item '{0}' not found".format(item))
 
@@ -719,6 +776,24 @@ class UIAWrapper(BaseWrapper):
             cc = self.descendants(control_type="Menu")
             if not cc:
                 raise AttributeError
+        menu = cc[0]
+        menu.item_by_path(path, exact).select()
+
+    # -----------------------------------------------------------
+    def toolbar_select(self, path, exact=False):
+        """
+        Select a Toolbar item specified in the path.
+
+        The full path syntax is specified in:
+        :py:meth:`pywinauto.controls.uia_controls.ToolbarWrapper.item_by_path`
+        """
+        self.verify_actionable()
+
+        cc = self.children(control_type="ToolBar")
+        if not cc:
+            cc = self.descendants(control_type="ToolBar")
+            if not cc:
+                raise AttributeError("Can not find any item with control_type=\"ToolBar\" in children and descendants!")
         menu = cc[0]
         menu.item_by_path(path, exact).select()
 
@@ -795,6 +870,24 @@ class UIAWrapper(BaseWrapper):
         except (uia_defs.NoPatternInterfaceError):
             pass
         return texts
+
+    # -----------------------------------------------------------
+    def move_window(self, x=None, y=None, width=None, height=None):
+        """Move the window to the new coordinates
+        The method should be implemented explicitly by controls that
+        support this action. The most obvious is the Window control.
+        Otherwise the method throws AttributeError
+
+        * **x** Specifies the new left position of the window.
+          Defaults to the current left position of the window.
+        * **y** Specifies the new top position of the window.
+          Defaults to the current top position of the window.
+        * **width** Specifies the new width of the window. Defaults to the
+          current width of the window.
+        * **height** Specifies the new height of the window. Default to the
+          current height of the window.
+        """
+        raise AttributeError("This method is not supported for {0}".format(self))
 
 
 backend.register('uia', UIAElementInfo, UIAWrapper)

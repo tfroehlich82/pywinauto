@@ -32,23 +32,35 @@
 """Tests for taskbar.py"""
 
 import unittest
+import platform
 import sys
 import os
 
 sys.path.append(".")
 from pywinauto import taskbar  # noqa: E402
 from pywinauto import findwindows  # noqa: E402
-from pywinauto.application import Application  # noqa: E402
-from pywinauto.application import ProcessNotFoundError  # noqa: E402
-from pywinauto.application import WindowSpecification  # noqa: E402
+from pywinauto.windows.application import Application  # noqa: E402
+from pywinauto.windows.application import ProcessNotFoundError  # noqa: E402
+from pywinauto.base_application import WindowSpecification  # noqa: E402
 from pywinauto.sysinfo import is_x64_Python, is_x64_OS  # noqa: E402
-from pywinauto import win32defines  # noqa: E402
+from pywinauto.windows import win32defines
 from pywinauto.timings import wait_until  # noqa: E402
 import pywinauto.actionlogger  # noqa: E402
 from pywinauto.timings import Timings  # noqa: E402
 from pywinauto.controls.common_controls import ToolbarWrapper  # noqa: E402
 from pywinauto import mouse  # noqa: E402
 from pywinauto import Desktop  # noqa: E402
+
+
+def win_build_number():
+    if sys.platform == 'win32':
+        return int(platform.version().split('.')[-1])
+    raise NotImplementedError('Can get Windows build number only on Windows')
+
+def is_win_server2016_or_before():
+    if sys.platform == 'win32':
+        return win_build_number() < 16299
+    return False
 
 #pywinauto.actionlogger.enable()
 mfc_samples_folder = os.path.join(
@@ -84,7 +96,7 @@ def _toggle_notification_area_icons(show_all=True, debug_img=None):
     handle = findwindows.find_elements(active_only=True,
                                        class_name=class_name)[-1].handle
     window = WindowSpecification({'handle': handle, 'backend': 'win32', })
-    explorer = Application().connect(process=window.process_id())
+    explorer = Application().connect(pid=window.process_id())
     cur_state = None
 
     try:
@@ -114,7 +126,7 @@ def _toggle_notification_area_icons(show_all=True, debug_img=None):
         explorer.wait_cpu_usage_lower(threshold=5, timeout=_ready_timeout)
 
         # Get the new opened applet
-        notif_area = Desktop().window(title="Notification Area Icons",
+        notif_area = Desktop().window(name="Notification Area Icons",
                                       class_name=class_name)
         notif_area.wait("ready", timeout=_ready_timeout)
         cur_state = notif_area.CheckBox.get_check_state()
@@ -213,6 +225,7 @@ class TaskbarTestCases(unittest.TestCase):
     def testSystemTray(self):
         taskbar.SystemTray.wait('visible', timeout=self.tm)  # just make sure it's found
 
+    @unittest.skipIf(not is_win_server2016_or_before(), "TODO: re-write test for Win 11 and WinServer 2019+")
     def testClock(self):
         "Test opening/closing of a system clock applet"
 
@@ -230,6 +243,7 @@ class TaskbarTestCases(unittest.TestCase):
         taskbar.Clock.type_keys("{ESC}", set_foreground=False)
         ClockWindow.wait_not('visible', timeout=self.tm)
 
+    @unittest.skipIf(not is_win_server2016_or_before(), "TODO: re-write test for Win 11 and WinServer 2019+")
     def testClickVisibleIcon(self):
         """
         Test minimizing a sample app into the visible area of the tray
@@ -257,7 +271,12 @@ class TaskbarTestCases(unittest.TestCase):
         def _show_popup_menu():
             taskbar.explorer_app.wait_cpu_usage_lower(threshold=5, timeout=self.tm)
             taskbar.RightClickSystemTrayIcon('MFCTrayDemo')
-            menu = self.app.top_window().children()[0]
+            children = self.app.top_window().children()
+            if not children:
+                # Somehow, we ended up with a dialog - parent of the menu
+                menu = self.app.windows(visible=True)[0].children()[0]
+            else:
+                menu = children[0]
             res = isinstance(menu, ToolbarWrapper) and menu.is_visible()
             menu_window[0] = menu
             return res
@@ -275,6 +294,7 @@ class TaskbarTestCases(unittest.TestCase):
         _toggle_notification_area_icons(show_all=orig_hid_state,
                                         debug_img="%s_02" % (self.id()))
 
+    @unittest.skipIf(not is_win_server2016_or_before(), "TODO: re-write test for Win 11 and WinServer 2019+")
     def testClickHiddenIcon(self):
         """
         Test minimizing a sample app into the hidden area of the tray
@@ -316,6 +336,7 @@ class TaskbarTestCases(unittest.TestCase):
 
         dlg2.send_message(win32defines.WM_CLOSE)
 
+    @unittest.skipIf(not is_win_server2016_or_before(), "TODO: re-write test for Win 11 and WinServer 2019+")
     def testClickCustomizeButton(self):
         "Test click on the 'show hidden icons' button"
 
@@ -345,7 +366,7 @@ class TaskbarTestCases(unittest.TestCase):
         niow_dlg.SysLink.click_input()
 
         nai = Desktop().window(
-            title="Notification Area Icons",
+            name="Notification Area Icons",
             class_name="CabinetWClass"
         )
         nai.wait('ready')
